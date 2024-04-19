@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## 5.2.0 (2024-04-19)
+
+* Updated Capacitor dependencies to 6.x
+* Updated android gradle dependencies
+
 ## 5.1.0 (2023-09-12)
 
 
