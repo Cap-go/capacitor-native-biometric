@@ -306,7 +306,7 @@ public class MainActivity extends BridgeActivity {
 ## Contributors
 
 [Jonthia](https://github.com/jonthia)
-[One Click Web Studio](https://github.com/oneclickwebstudio)
+[QliQ.dev](https://github.com/qliqdev)
 [Brian Weasner](https://github.com/brian-weasner)
 [Mohamed Diarra](https://github.com/mohdiarra)
 ### Want to Contribute?
