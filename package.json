@@ -1,6 +1,6 @@
 {
   "name": "@capgo/capacitor-native-biometric",
-  "version": "6.0.5",
+  "version": "7.0.0",
   "description": "This plugin gives access to the native biometric apis for android and iOS",
   "main": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
@@ -23,10 +23,10 @@
   "author": "Martin Donadieu",
   "license": "MIT",
   "devDependencies": {
-    "@capacitor/android": "^6.0.0",
-    "@capacitor/core": "^6.0.0",
+    "@capacitor/android": "^7.0.1",
+    "@capacitor/core": "^7.0.1",
     "@capacitor/docgen": "^0.2.2",
-    "@capacitor/ios": "^6.0.0",
+    "@capacitor/ios": "^7.0.1",
     "@ionic/eslint-config": "^0.3.0",
     "@ionic/prettier-config": "^4.0.0",
     "@ionic/swiftlint-config": "^1.1.2",
