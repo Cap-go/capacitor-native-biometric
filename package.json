@@ -38,9 +38,6 @@
     "swiftlint": "^1.0.2",
     "typescript": "~5.4.5"
   },
-  "peerDependencies": {
-    "@capacitor/core": "^6.0.0"
-  },
   "files": [
     "dist/",
     "ios/",
