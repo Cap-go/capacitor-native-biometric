@@ -42,7 +42,7 @@
     "dist/",
     "ios/",
     "android/",
-    "CapgoCapacitorNativeBiometric.podspec"
+    "CapacitorNativeBiometric.podspec"
   ],
   "keywords": [
     "capacitor",
@@ -64,9 +64,9 @@
   "swiftlint": "@ionic/swiftlint-config",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Cap-go/capacitor-native-biometric"
+    "url": "https://github.com/surgery18/capacitor-native-biometric"
   },
   "bugs": {
-    "url": "https://github.com/Cap-go/capacitor-native-biometric/issues"
+    "url": "https://github.com/surgery18/capacitor-native-biometric/issues"
   }
 }
