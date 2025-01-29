@@ -1,5 +1,5 @@
 {
-  "name": "@capgo/capacitor-native-biometric",
+  "name": "@surgery18/capacitor-native-biometric",
   "version": "7.0.0",
   "description": "This plugin gives access to the native biometric apis for android and iOS",
   "main": "dist/esm/index.js",
@@ -20,7 +20,7 @@
     "docgen": "docgen --api NativeBiometricPlugin --output-readme README.md --output-json dist/docs.json",
     "prepublishOnly": "npm run build"
   },
-  "author": "Martin Donadieu",
+  "author": "Scott Deutsch",
   "license": "MIT",
   "devDependencies": {
     "@capacitor/android": "^7.0.1",
