@@ -1,6 +1,6 @@
 {
-  "name": "@capgo/capacitor-native-biometric",
-  "version": "6.0.5",
+  "name": "@surgery18/capacitor-native-biometric",
+  "version": "7.0.0",
   "description": "This plugin gives access to the native biometric apis for android and iOS",
   "main": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
@@ -20,13 +20,13 @@
     "docgen": "docgen --api NativeBiometricPlugin --output-readme README.md --output-json dist/docs.json",
     "prepublishOnly": "npm run build"
   },
-  "author": "Martin Donadieu",
+  "author": "Scott Deutsch",
   "license": "MIT",
   "devDependencies": {
-    "@capacitor/android": "^6.0.0",
-    "@capacitor/core": "^6.0.0",
+    "@capacitor/android": "^7.0.1",
+    "@capacitor/core": "^7.0.1",
     "@capacitor/docgen": "^0.2.2",
-    "@capacitor/ios": "^6.0.0",
+    "@capacitor/ios": "^7.0.1",
     "@ionic/eslint-config": "^0.3.0",
     "@ionic/prettier-config": "^4.0.0",
     "@ionic/swiftlint-config": "^1.1.2",
@@ -38,14 +38,11 @@
     "swiftlint": "^1.0.2",
     "typescript": "~5.4.5"
   },
-  "peerDependencies": {
-    "@capacitor/core": "^6.0.0"
-  },
   "files": [
     "dist/",
     "ios/",
     "android/",
-    "CapgoCapacitorNativeBiometric.podspec"
+    "CapacitorNativeBiometric.podspec"
   ],
   "keywords": [
     "capacitor",
@@ -67,9 +64,9 @@
   "swiftlint": "@ionic/swiftlint-config",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Cap-go/capacitor-native-biometric"
+    "url": "https://github.com/surgery18/capacitor-native-biometric"
   },
   "bugs": {
-    "url": "https://github.com/Cap-go/capacitor-native-biometric/issues"
+    "url": "https://github.com/surgery18/capacitor-native-biometric/issues"
   }
 }
