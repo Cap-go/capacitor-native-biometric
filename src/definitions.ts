@@ -81,6 +81,11 @@ export interface DeleteCredentialOptions {
 /**
  * Keep this in sync with BiometricAuthError in README.md
  * Update whenever `convertToPluginErrorCode` functions are modified
+ * 
+ * Error code flow:
+ * - Android ERROR_LOCKOUT (7) -> USER_TEMPORARY_LOCKOUT (4)
+ * - Android ERROR_LOCKOUT_PERMANENT (9) -> USER_LOCKOUT (2)
+ * - Android AUTHENTICATION_RESULT_TYPE_BIOMETRIC (2) is not an error
  */
 export enum BiometricAuthError {
   UNKNOWN_ERROR = 0,

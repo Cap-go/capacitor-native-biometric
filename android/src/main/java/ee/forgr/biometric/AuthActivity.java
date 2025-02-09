@@ -107,11 +107,17 @@ public class AuthActivity extends AppCompatActivity {
         public void onAuthenticationFailed() {
           super.onAuthenticationFailed();
           counter++;
-          if (counter == maxAttempts) finishActivity(
-            "failed",
-            10,
-            "Authentication failed."
-          );
+          // Don't finish activity here, let Android's ERROR_LOCKOUT trigger through onAuthenticationError
+          // This ensures proper error propagation for too many attempts
+          if (counter == maxAttempts) {
+            // Android will automatically trigger ERROR_LOCKOUT after too many attempts
+            // The error will be handled in onAuthenticationError with proper error code
+            finishActivity(
+              "failed",
+              10,
+              "Authentication failed. Too many attempts."
+            );
+          }
         }
       }
     );
@@ -140,6 +146,10 @@ public class AuthActivity extends AppCompatActivity {
    * Convert Auth Error Codes to plugin expected Biometric Auth Errors (in README.md)
    * This way both iOS and Android return the same error codes for the same authentication failure reasons.
    * !!IMPORTANT!!: Whenever this is modified, check if similar function in iOS Plugin.swift needs to be modified as well
+   * Error code flow:
+   * - ERROR_LOCKOUT (7) -> USER_TEMPORARY_LOCKOUT (4)
+   * - ERROR_LOCKOUT_PERMANENT (9) -> USER_LOCKOUT (2)
+   * - AUTHENTICATION_RESULT_TYPE_BIOMETRIC (2) is not an error, ignored
    * @see <a href="https://developer.android.com/reference/androidx/biometric/BiometricPrompt#constants">...</a>
    * @return BiometricAuthError
    */
@@ -153,6 +163,7 @@ public class AuthActivity extends AppCompatActivity {
       case BiometricPrompt.ERROR_NO_BIOMETRICS:
         return 3;
       case BiometricPrompt.ERROR_LOCKOUT:
+        // ERROR_LOCKOUT (code 7) maps to temporary lockout (4)
         return 4;
       // Authentication Failure (10) Handled by `onAuthenticationFailed`.
       // App Cancel (11), Invalid Context (12), and Not Interactive (13) are not valid error codes for Android.
