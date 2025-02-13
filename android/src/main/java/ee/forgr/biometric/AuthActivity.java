@@ -70,16 +70,16 @@ public class AuthActivity extends AppCompatActivity {
     } else {
       if (useFallback) {
         builder.setDeviceCredentialAllowed(true);
-      } else {
-        builder.setNegativeButtonText(
-          getIntent().hasExtra("negativeButtonText")
-            ? Objects.requireNonNull(
-              getIntent().getStringExtra("negativeButtonText")
-            )
-            : "Cancel"
-        );
       }
     }
+    
+    builder.setNegativeButtonText(
+      getIntent().hasExtra("negativeButtonText")
+        ? Objects.requireNonNull(
+          getIntent().getStringExtra("negativeButtonText")
+        )
+        : "Cancel"
+    );
 
     BiometricPrompt.PromptInfo promptInfo = builder.build();
 
