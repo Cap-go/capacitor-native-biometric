@@ -14,6 +14,7 @@ import java.util.concurrent.Executor;
 
 public class AuthActivity extends AppCompatActivity {
 
+  private BiometricPrompt biometricPrompt;
   private int maxAttempts;
   private int counter = 0;
 
@@ -76,7 +77,7 @@ public class AuthActivity extends AppCompatActivity {
 
     BiometricPrompt.PromptInfo promptInfo = builder.build();
 
-    BiometricPrompt biometricPrompt = new BiometricPrompt(
+    biometricPrompt = new BiometricPrompt(
       this,
       executor,
       new BiometricPrompt.AuthenticationCallback() {
@@ -112,6 +113,7 @@ public class AuthActivity extends AppCompatActivity {
           super.onAuthenticationFailed();
           counter++;
           if (counter >= maxAttempts) {
+            biometricPrompt.cancelAuthentication();
             // Use error code 4 for too many attempts to match iOS behavior
             finishActivity("error", 4, "Too many failed attempts");
           }
