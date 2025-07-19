@@ -278,26 +278,6 @@ To use android's BiometricPrompt api you must add the following permission to yo
 <uses-permission android:name="android.permission.USE_BIOMETRIC">
 ```
 
-And register the plugin by adding it to you MainActivity's onCreate (Not needed for Capacitor 3):
-
-```java
-import ee.forgr.biometric.NativeBiometric;
-
-public class MainActivity extends BridgeActivity {
-  @Override
-  public void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-
-    // Initializes the Bridge
-    this.init(savedInstanceState, new ArrayList<Class<? extends Plugin>>() {{
-      // Additional plugins you've installed go here
-      // Ex: add(TotallyAwesomePlugin.class);
-      add(NativeBiometric.class);
-    }});
-  }
-}
-```
-
 ## Contributors
 
 [Jonthia](https://github.com/jonthia)
