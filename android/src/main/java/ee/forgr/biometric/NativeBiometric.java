@@ -470,12 +470,16 @@ public class NativeBiometric extends Plugin {
           .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
           .setUserAuthenticationRequired(true)
           // Set authentication validity duration to 0 to require authentication for every use
-          .setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
+          .setUserAuthenticationParameters(
+            0,
+            KeyProperties.AUTH_BIOMETRIC_STRONG
+          )
           .build()
       );
       keyPairGenerator.generateKeyPair();
       // Get the newly generated key entry
-      privateKeyEntry = (KeyStore.PrivateKeyEntry) getKeyStore().getEntry(KEY_ALIAS, null);
+      privateKeyEntry = (KeyStore.PrivateKeyEntry) getKeyStore()
+        .getEntry(KEY_ALIAS, null);
     }
 
     return privateKeyEntry;
