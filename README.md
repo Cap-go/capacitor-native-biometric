@@ -29,7 +29,13 @@ async performBiometricVerification(){
 
   if(!verified) return;
 
-  const credentials = await NativeBiometric.getCredentials({
+  const credentials = await NativeBiometric.verifyIdentityAndGetCredentials({
+    reason: "For easy log in",
+    title: "Log in",
+    subtitle: "Maybe add subtitle here?",
+    description: "Maybe a description too?",
+  },
+  {
     server: "www.example.com",
   });
 }
@@ -71,7 +77,7 @@ This is a plugin specific list of error codes that can be thrown on verifyIdenti
 
 * [`isAvailable(...)`](#isavailable)
 * [`verifyIdentity(...)`](#verifyidentity)
-* [`getCredentials(...)`](#getcredentials)
+* [`verifyIdentityAndGetCredentials(...)`](#verifyidentityandgetcredentials)
 * [`setCredentials(...)`](#setcredentials)
 * [`deleteCredentials(...)`](#deletecredentials)
 * [Interfaces](#interfaces)
@@ -118,17 +124,17 @@ Prompts the user to authenticate with biometrics.
 --------------------
 
 
-### getCredentials(...)
+### verifyIdentityAndGetCredentials(...)
 
 ```typescript
-getCredentials(options: GetCredentialOptions) => Promise<Credentials>
+verifyIdentityAndGetCredentials(options: BiometricOptions & GetCredentialOptions) => Promise<Credentials>
 ```
 
 Gets the stored credentials for a given server.
 
-| Param         | Type                                                                  |
-| ------------- | --------------------------------------------------------------------- |
-| **`options`** | <code><a href="#getcredentialoptions">GetCredentialOptions</a></code> |
+| Param         | Type                                                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **`options`** | <code><a href="#biometricoptions">BiometricOptions</a> & <a href="#getcredentialoptions">GetCredentialOptions</a></code> |
 
 **Returns:** <code>Promise&lt;<a href="#credentials">Credentials</a>&gt;</code>
 

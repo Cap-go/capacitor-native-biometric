@@ -122,12 +122,12 @@ export interface NativeBiometricPlugin {
   verifyIdentity(options?: BiometricOptions): Promise<void>;
   /**
    * Gets the stored credentials for a given server.
-   * @param {GetCredentialOptions} options
+   * @param {BiometricOptions & GetCredentialOptions} options
    * @returns {Promise<Credentials>}
    * @memberof NativeBiometricPlugin
    * @since 1.0.0
    */
-  getCredentials(options: GetCredentialOptions): Promise<Credentials>;
+  verifyIdentityAndGetCredentials(options: BiometricOptions & GetCredentialOptions): Promise<Credentials>;
   /**
    * Stores the given credentials for a given server.
    * @param {SetCredentialOptions} options

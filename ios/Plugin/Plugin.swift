@@ -102,19 +102,50 @@ public class NativeBiometric: CAPPlugin {
         }
     }
 
-    @objc func getCredentials(_ call: CAPPluginCall) {
-        guard let server = call.getString("server") else {
-            call.reject("No server name was provided")
-            return
+    @objc func verifyIdentityAndGetCredentials(_ call: CAPPluginCall) {
+        let context = LAContext()
+        var canEvaluateError: NSError?
+
+        let useFallback = call.getBool("useFallback", false)
+        context.localizedFallbackTitle = ""
+
+        if useFallback {
+            context.localizedFallbackTitle = nil
+            if let fallbackTitle = call.getString("fallbackTitle") {
+                context.localizedFallbackTitle = fallbackTitle
+            }
         }
-        do {
-            let credentials = try getCredentialsFromKeychain(server)
-            var obj = JSObject()
-            obj["username"] = credentials.username
-            obj["password"] = credentials.password
-            call.resolve(obj)
-        } catch {
-            call.reject(error.localizedDescription)
+
+        let policy = useFallback ? LAPolicy.deviceOwnerAuthentication : LAPolicy.deviceOwnerAuthenticationWithBiometrics
+
+        if context.canEvaluatePolicy(policy, error: &canEvaluateError) {
+            let reason = call.getString("reason") ?? "For biometric authentication"
+            context.evaluatePolicy(policy, localizedReason: reason) { (success, evaluateError) in
+                if success {
+                    guard let server = call.getString("server") else {
+                        call.reject("No server name was provided")
+                        return
+                    }
+                    do {
+                        let credentials = try self.getCredentialsFromKeychain(server)
+                        var obj = JSObject()
+                        obj["username"] = credentials.username
+                        obj["password"] = credentials.password
+                        call.resolve(obj)
+                    } catch {
+                        call.reject(error.localizedDescription)
+                    }
+                } else {
+                    guard let error = evaluateError else {
+                        call.reject("Biometrics Error", "0")
+                        return
+                    }
+                    var pluginErrorCode = self.convertToPluginErrorCode(error._code)
+                    call.reject(error.localizedDescription, pluginErrorCode.description, error)
+                }
+            }
+        } else {
+            call.reject("Authentication not available")
         }
     }
 

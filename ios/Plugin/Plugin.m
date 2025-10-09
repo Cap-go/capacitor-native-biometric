@@ -6,7 +6,7 @@
 CAP_PLUGIN(NativeBiometric, "NativeBiometric",
            CAP_PLUGIN_METHOD(isAvailable, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(verifyIdentity, CAPPluginReturnPromise);
-           CAP_PLUGIN_METHOD(getCredentials, CAPPluginReturnPromise);
+           CAP_PLUGIN_METHOD(verifyIdentityAndGetCredentials, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(setCredentials, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(deleteCredentials, CAPPluginReturnPromise);
 )
