@@ -24,7 +24,7 @@ export class NativeBiometricWeb
   verifyIdentity(_options?: BiometricOptions): Promise<void> {
     throw new Error("Method not implemented.");
   }
-  getCredentials(_options: GetCredentialOptions): Promise<Credentials> {
+  verifyIdentityAndGetCredentials(_options: BiometricOptions & GetCredentialOptions): Promise<Credentials> {
     throw new Error("Method not implemented.");
   }
   setCredentials(_options: SetCredentialOptions): Promise<void> {

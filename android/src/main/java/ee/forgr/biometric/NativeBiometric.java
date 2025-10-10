@@ -195,6 +195,47 @@ public class NativeBiometric extends Plugin {
   }
 
   @PluginMethod
+  public void verifyIdentityAndGetCredentials(final PluginCall call) {
+    Intent intent = new Intent(getContext(), AuthActivity.class);
+
+    intent.putExtra("title", call.getString("title", "Authenticate"));
+
+    if (call.hasOption("subtitle")) {
+      intent.putExtra("subtitle", call.getString("subtitle"));
+    }
+
+    if (call.hasOption("description")) {
+      intent.putExtra("description", call.getString("description"));
+    }
+
+    if (call.hasOption("negativeButtonText")) {
+      intent.putExtra(
+        "negativeButtonText",
+        call.getString("negativeButtonText")
+      );
+    }
+
+    if (call.hasOption("maxAttempts")) {
+      intent.putExtra("maxAttempts", call.getInt("maxAttempts"));
+    }
+
+    boolean useFallback = Boolean.TRUE.equals(
+      call.getBoolean("useFallback", false)
+    );
+    if (useFallback) {
+      useFallback = this.deviceHasCredentials();
+    }
+
+    intent.putExtra("useFallback", useFallback);
+
+    if (call.hasOption("isWeakAuthenticatorAllowed")) {
+      intent.putExtra("isWeakAuthenticatorAllowed", call.getBoolean("isWeakAuthenticatorAllowed"));
+    }
+
+    startActivityForResult(call, intent, "verifyIdentityAndGetCredentialsResult");
+  }
+
+  @PluginMethod
   public void setCredentials(final PluginCall call) {
     String username = call.getString("username", null);
     String password = call.getString("password", null);
@@ -227,43 +268,6 @@ public class NativeBiometric extends Plugin {
     }
   }
 
-  @PluginMethod
-  public void getCredentials(final PluginCall call) {
-    String KEY_ALIAS = call.getString("server", null);
-
-    SharedPreferences sharedPreferences = getContext()
-      .getSharedPreferences(
-        NATIVE_BIOMETRIC_SHARED_PREFERENCES,
-        Context.MODE_PRIVATE
-      );
-    String username = sharedPreferences.getString(
-      KEY_ALIAS + "-username",
-      null
-    );
-    String password = sharedPreferences.getString(
-      KEY_ALIAS + "-password",
-      null
-    );
-    if (KEY_ALIAS != null) {
-      if (username != null && password != null) {
-        try {
-          JSObject jsObject = new JSObject();
-          jsObject.put("username", decryptString(username, KEY_ALIAS));
-          jsObject.put("password", decryptString(password, KEY_ALIAS));
-          call.resolve(jsObject);
-        } catch (GeneralSecurityException | IOException e) {
-          // Can get here if not authenticated.
-          String errorMessage = "Failed to get credentials";
-          call.reject(errorMessage);
-        }
-      } else {
-        call.reject("No credentials found");
-      }
-    } else {
-      call.reject("No server name was provided");
-    }
-  }
-
   @ActivityCallback
   private void verifyResult(PluginCall call, ActivityResult result) {
     if (result.getResultCode() == Activity.RESULT_OK) {
@@ -282,6 +286,62 @@ public class NativeBiometric extends Plugin {
             break;
           default:
             // Should not get to here unless AuthActivity starts returning different Activity Results.
+            call.reject("Something went wrong.");
+            break;
+        }
+      }
+    } else {
+      call.reject("Something went wrong.");
+    }
+  }
+
+  @ActivityCallback
+  private void verifyIdentityAndGetCredentialsResult(PluginCall call, ActivityResult result) {
+    if (result.getResultCode() == Activity.RESULT_OK) {
+      Intent data = result.getData();
+      if (data != null && data.hasExtra("result")) {
+        switch (data.getStringExtra("result")) {
+          case "success": {
+            String KEY_ALIAS = call.getString("server", null);
+            if (KEY_ALIAS == null) {
+              call.reject("No server name was provided");
+              return;
+            }
+            SharedPreferences sharedPreferences = getContext()
+              .getSharedPreferences(
+                NATIVE_BIOMETRIC_SHARED_PREFERENCES,
+                Context.MODE_PRIVATE
+              );
+            String username = sharedPreferences.getString(
+              KEY_ALIAS + "-username",
+              null
+            );
+            String password = sharedPreferences.getString(
+              KEY_ALIAS + "-password",
+              null
+            );
+            if (username == null || password == null) {
+              call.reject("No credentials found");
+              return;
+            }
+            try {
+              JSObject jsObject = new JSObject();
+              jsObject.put("username", decryptString(username, KEY_ALIAS));
+              jsObject.put("password", decryptString(password, KEY_ALIAS));
+              call.resolve(jsObject);
+            } catch (GeneralSecurityException | IOException e) {
+              call.reject("Failed to get credentials");
+            }
+            break;
+          }
+          case "failed":
+          case "error":
+            call.reject(
+              data.getStringExtra("errorDetails"),
+              data.getStringExtra("errorCode")
+            );
+            break;
+          default:
             call.reject("Something went wrong.");
             break;
         }
