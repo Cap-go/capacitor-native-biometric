@@ -1,0 +1,12 @@
+{
+  "appId": "app.capgo.native.biometric",
+  "appName": "example-app",
+  "webDir": "dist",
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 1000
+    },
+    "CapgoNativeBiometric": {}
+  }
+}
