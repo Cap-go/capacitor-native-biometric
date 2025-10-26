@@ -9,6 +9,10 @@
 
 Use biometrics confirm device owner presence or authenticate users. A couple of methods are provided to handle user credentials. These are securely stored using Keychain (iOS) and Keystore (Android).
 
+## Documentation
+
+The most complete doc is available here: https://capgo.app/docs/plugins/native-biometric/
+
 ## Installation (Only supports Capacitor 7)
 
 - `npm i @capgo/capacitor-native-biometric`
