@@ -1,4 +1,4 @@
-import { WebPlugin } from "@capacitor/core";
+import { WebPlugin } from '@capacitor/core';
 
 import type {
   NativeBiometricPlugin,
@@ -8,33 +8,30 @@ import type {
   SetCredentialOptions,
   DeleteCredentialOptions,
   Credentials,
-} from "./definitions";
+} from './definitions';
 
-export class NativeBiometricWeb
-  extends WebPlugin
-  implements NativeBiometricPlugin
-{
+export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlugin {
   constructor() {
     super();
   }
   isAvailable(): Promise<AvailableResult> {
-    throw new Error("Method not implemented.");
+    throw new Error('Method not implemented.');
   }
 
   verifyIdentity(_options?: BiometricOptions): Promise<void> {
-    console.log("verifyIdentity", _options);
-    throw new Error("Method not implemented.");
+    console.log('verifyIdentity', _options);
+    throw new Error('Method not implemented.');
   }
   getCredentials(_options: GetCredentialOptions): Promise<Credentials> {
-    console.log("getCredentials", _options);
-    throw new Error("Method not implemented.");
+    console.log('getCredentials', _options);
+    throw new Error('Method not implemented.');
   }
   setCredentials(_options: SetCredentialOptions): Promise<void> {
-    console.log("setCredentials", _options);
-    throw new Error("Method not implemented.");
+    console.log('setCredentials', _options);
+    throw new Error('Method not implemented.');
   }
   deleteCredentials(_options: DeleteCredentialOptions): Promise<void> {
-    console.log("deleteCredentials", _options);
-    throw new Error("Method not implemented.");
+    console.log('deleteCredentials', _options);
+    throw new Error('Method not implemented.');
   }
 }

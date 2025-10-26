@@ -7,9 +7,9 @@ import LocalAuthentication
  * here: https://capacitor.ionicframework.com/docs/plugins/ios
  */
 
-@objc(NativeBiometric)
-public class NativeBiometric: CAPPlugin, CAPBridgedPlugin {
-    public let identifier = "NativeBiometric"
+@objc(CapgoNativeBiometricPlugin)
+public class CapgoNativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "CapgoNativeBiometricPlugin"
     public let jsName = "NativeBiometric"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "isAvailable", returnType: CAPPluginReturnPromise),
