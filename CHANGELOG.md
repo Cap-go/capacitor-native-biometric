@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.1.15](https://github.com/Cap-go/capacitor-native-biometric/compare/7.1.14...7.1.15) (2025-10-26)
+
 ## [7.1.14](https://github.com/Cap-go/capacitor-native-biometric/compare/7.1.13...7.1.14) (2025-10-26)
 
 
