@@ -16,7 +16,8 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "verifyIdentity", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getCredentials", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setCredentials", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "deleteCredentials", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "deleteCredentials", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "isCredentialsSaved", returnType: CAPPluginReturnPromise)
     ]
     struct Credentials {
         var username: String
@@ -162,6 +163,27 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         } catch {
             call.reject(error.localizedDescription)
         }
+    }
+
+    @objc func isCredentialsSaved(_ call: CAPPluginCall) {
+        guard let server = call.getString("server") else {
+            call.reject("No server name was provided")
+            return
+        }
+
+        var obj = JSObject()
+        obj["isSaved"] = checkCredentialsExist(server)
+        call.resolve(obj)
+    }
+
+    // Check if credentials exist in Keychain
+    func checkCredentialsExist(_ server: String) -> Bool {
+        let query: [String: Any] = [kSecClass as String: kSecClassInternetPassword,
+                                    kSecAttrServer as String: server,
+                                    kSecMatchLimit as String: kSecMatchLimitOne]
+
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        return status == errSecSuccess
     }
 
     // Store user Credentials in Keychain

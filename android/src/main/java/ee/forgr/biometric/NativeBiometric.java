@@ -291,6 +291,24 @@ public class NativeBiometric extends Plugin {
         }
     }
 
+    @PluginMethod
+    public void isCredentialsSaved(final PluginCall call) {
+        String KEY_ALIAS = call.getString("server", null);
+
+        if (KEY_ALIAS != null) {
+            SharedPreferences sharedPreferences = getContext()
+                .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE);
+            String username = sharedPreferences.getString(KEY_ALIAS + "-username", null);
+            String password = sharedPreferences.getString(KEY_ALIAS + "-password", null);
+
+            JSObject ret = new JSObject();
+            ret.put("isSaved", username != null && password != null);
+            call.resolve(ret);
+        } else {
+            call.reject("No server name was provided");
+        }
+    }
+
     private String encryptString(String stringToEncrypt, String KEY_ALIAS) throws GeneralSecurityException, IOException {
         Cipher cipher;
         cipher = Cipher.getInstance(TRANSFORMATION);
