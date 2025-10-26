@@ -1,6 +1,14 @@
 # Changelog
 
-All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
+All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+
+## [7.1.14](https://github.com/Cap-go/capacitor-native-biometric/compare/7.1.13...7.1.14) (2025-10-26)
+
+
+### Bug Fixes
+
+* migrate to ios new arch ([d0be1fb](https://github.com/Cap-go/capacitor-native-biometric/commit/d0be1fb89d748f38ea3462375a36ada7b558947c))
+* release ([875f06d](https://github.com/Cap-go/capacitor-native-biometric/commit/875f06db96037cb3a695c7a9001c94bc2e0004da))
 
 ### [7.1.13](https://github.com/Cap-go/capacitor-native-biometric/compare/7.1.12...7.1.13) (2025-07-19)
 
