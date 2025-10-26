@@ -7,22 +7,22 @@ let package = Package(
     products: [
         .library(
             name: "CapgoCapacitorNativeBiometric",
-            targets: ["CapgoNativeBiometricPlugin"])
+            targets: ["NativeBiometricPlugin"])
     ],
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "7.0.0")
     ],
     targets: [
         .target(
-            name: "CapgoNativeBiometricPlugin",
+            name: "NativeBiometricPlugin",
             dependencies: [
                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
                 .product(name: "Cordova", package: "capacitor-swift-pm")
             ],
-            path: "ios/Sources/CapgoNativeBiometricPlugin"),
+            path: "ios/Sources/NativeBiometricPlugin"),
         .testTarget(
-            name: "CapgoNativeBiometricPluginTests",
-            dependencies: ["CapgoNativeBiometricPlugin"],
-            path: "ios/Tests/CapgoNativeBiometricPluginTests")
+            name: "NativeBiometricPluginTests",
+            dependencies: ["NativeBiometricPlugin"],
+            path: "ios/Tests/NativeBiometricPluginTests")
     ]
 )
