@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.3.0](https://github.com/Cap-go/capacitor-native-biometric/compare/7.2.0...7.3.0) (2025-10-26)
+
+
+### Features
+
+* add isCredentialsSaved method to check for saved credentials ([fc43a35](https://github.com/Cap-go/capacitor-native-biometric/commit/fc43a35962438667f1dbb9c39196e8fc7409c978))
+
+
+### Bug Fixes
+
+* lock ([4561016](https://github.com/Cap-go/capacitor-native-biometric/commit/4561016cc751892beb23f444504dc30010684e23))
+
 ## [7.2.0](https://github.com/Cap-go/capacitor-native-biometric/compare/7.1.17...7.2.0) (2025-10-26)
 
 
