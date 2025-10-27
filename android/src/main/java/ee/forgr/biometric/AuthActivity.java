@@ -45,17 +45,20 @@ public class AuthActivity extends AppCompatActivity {
         boolean useFallback = getIntent().getBooleanExtra("useFallback", false);
         int[] allowedTypes = getIntent().getIntArrayExtra("allowedBiometryTypes");
 
-        int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
+        int leftAuthenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
         if (useFallback) {
-            authenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+            leftAuthenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
         }
         if (allowedTypes != null) {
             // Filter authenticators based on allowed types
-            authenticators = getAllowedAuthenticators(allowedTypes);
+            leftAuthenticators = getAllowedAuthenticators(allowedTypes);
         }
-        builder.setAllowedAuthenticators(authenticators);
+        builder.setAllowedAuthenticators(leftAuthenticators);
 
-        if (!useFallback) {
+        // Set negative button text if DEVICE_CREDENTIAL is not allowed
+        // When allowedAuthenticators includes DEVICE_CREDENTIAL, negative button text must not be set
+        boolean deviceCredentialAllowed = (leftAuthenticators & BiometricManager.Authenticators.DEVICE_CREDENTIAL) != 0;
+        if (!deviceCredentialAllowed) {
             String negativeText = getIntent().getStringExtra("negativeButtonText");
             builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
         }
@@ -157,10 +160,14 @@ public class AuthActivity extends AppCompatActivity {
         int authenticators = 0;
         for (int type : allowedTypes) {
             switch (type) {
-                case 3: // FINGERPRINT
-                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
-                    break;
+                case 2: // FACE_ID (iOS) - treat as FACE_AUTHENTICATION for Android
                 case 4: // FACE_AUTHENTICATION
+                    // Include both strong and weak biometrics for face authentication
+                    // Some devices (like Samsung) classify face as weak biometric
+                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
+                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_WEAK;
+                    break;
+                case 3: // FINGERPRINT
                     authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
                     break;
                 case 5: // IRIS_AUTHENTICATION
