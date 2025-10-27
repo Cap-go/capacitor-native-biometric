@@ -86,6 +86,7 @@ This is a plugin specific list of error codes that can be thrown on verifyIdenti
 * [`setCredentials(...)`](#setcredentials)
 * [`deleteCredentials(...)`](#deletecredentials)
 * [`isCredentialsSaved(...)`](#iscredentialssaved)
+* [`getPluginVersion()`](#getpluginversion)
 * [Interfaces](#interfaces)
 * [Enums](#enums)
 
@@ -198,6 +199,21 @@ Checks if credentials are already saved for a given server.
 **Returns:** <code>Promise&lt;<a href="#iscredentialssavedresult">IsCredentialsSavedResult</a>&gt;</code>
 
 **Since:** 7.3.0
+
+--------------------
+
+
+### getPluginVersion()
+
+```typescript
+getPluginVersion() => Promise<{ version: string; }>
+```
+
+Get the native Capacitor plugin version.
+
+**Returns:** <code>Promise&lt;{ version: string; }&gt;</code>
+
+**Since:** 1.0.0
 
 --------------------
 
