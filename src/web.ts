@@ -40,4 +40,8 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
     console.log('isCredentialsSaved', _options);
     throw new Error('Method not implemented.');
   }
+
+  async getPluginVersion(): Promise<{ version: string }> {
+    return { version: 'web' };
+  }
 }

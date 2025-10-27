@@ -155,4 +155,12 @@ export interface NativeBiometricPlugin {
    * @since 7.3.0
    */
   isCredentialsSaved(options: IsCredentialsSavedOptions): Promise<IsCredentialsSavedResult>;
+
+  /**
+   * Get the native Capacitor plugin version.
+   *
+   * @returns Promise that resolves with the plugin version
+   * @since 1.0.0
+   */
+  getPluginVersion(): Promise<{ version: string }>;
 }

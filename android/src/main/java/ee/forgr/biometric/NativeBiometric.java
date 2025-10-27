@@ -51,6 +51,8 @@ import org.json.JSONException;
 @CapacitorPlugin(name = "NativeBiometric")
 public class NativeBiometric extends Plugin {
 
+    private final String PLUGIN_VERSION = "7.3.2";
+
     //protected final static int AUTH_CODE = 0102;
 
     private static final int NONE = 0;
@@ -459,5 +461,16 @@ public class NativeBiometric extends Plugin {
         KeyguardManager keyguardManager = (KeyguardManager) getActivity().getSystemService(Context.KEYGUARD_SERVICE);
         // Can only use fallback if the device has a pin/pattern/password lockscreen.
         return keyguardManager.isDeviceSecure();
+    }
+
+    @PluginMethod
+    public void getPluginVersion(final PluginCall call) {
+        try {
+            final JSObject ret = new JSObject();
+            ret.put("version", this.PLUGIN_VERSION);
+            call.resolve(ret);
+        } catch (final Exception e) {
+            call.reject("Could not get plugin version", e);
+        }
     }
 }

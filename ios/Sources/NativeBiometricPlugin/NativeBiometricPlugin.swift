@@ -9,6 +9,7 @@ import LocalAuthentication
 
 @objc(NativeBiometricPlugin)
 public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
+    private let PLUGIN_VERSION: String = "7.3.2"
     public let identifier = "NativeBiometricPlugin"
     public let jsName = "NativeBiometric"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -17,7 +18,8 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getCredentials", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setCredentials", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "deleteCredentials", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "isCredentialsSaved", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "isCredentialsSaved", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
     ]
     struct Credentials {
         var username: String
@@ -292,5 +294,9 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         default:
             return 0
         }
+    }
+
+    @objc func getPluginVersion(_ call: CAPPluginCall) {
+        call.resolve(["version": self.PLUGIN_VERSION])
     }
 }
