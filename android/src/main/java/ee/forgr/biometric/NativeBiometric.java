@@ -79,7 +79,7 @@ public class NativeBiometric extends Plugin {
         // Check for biometric capabilities
         int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
         int canAuthenticate = biometricManager.canAuthenticate(authenticators);
-        
+
         // If fallback is enabled and strong biometrics not available, check weak biometrics (for devices like Samsung)
         if (useFallback && canAuthenticate != BiometricManager.BIOMETRIC_SUCCESS) {
             canAuthenticate = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK);
@@ -100,7 +100,7 @@ public class NativeBiometric extends Plugin {
                 // Use system feature to check for face authentication
                 hasFace = pm.hasSystemFeature(PackageManager.FEATURE_FACE);
             }
-            
+
             // If fallback is enabled, also check for weak face authentication (like Samsung)
             if (useFallback && !hasFace) {
                 try {
@@ -135,14 +135,14 @@ public class NativeBiometric extends Plugin {
         boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));
 
         BiometricManager biometricManager = BiometricManager.from(getContext());
-        
+
         // Check for strong biometrics first
         int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
         if (useFallback) {
             authenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
         }
         int canAuthenticateResult = biometricManager.canAuthenticate(authenticators);
-        
+
         // If fallback is enabled and strong biometrics are not available, check for weak biometrics (for devices like Samsung with weak face auth)
         if (useFallback && canAuthenticateResult != BiometricManager.BIOMETRIC_SUCCESS) {
             int weakAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK;
@@ -152,12 +152,12 @@ public class NativeBiometric extends Plugin {
                 canAuthenticateResult = BiometricManager.BIOMETRIC_SUCCESS;
             }
         }
-        
+
         // Using deviceHasCredentials instead of canAuthenticate(DEVICE_CREDENTIAL)
         // > "Developers that wish to check for the presence of a PIN, pattern, or password on these versions should instead use isDeviceSecure."
         // @see https://developer.android.com/reference/androidx/biometric/BiometricManager#canAuthenticate(int)
         boolean fallbackAvailable = useFallback && this.deviceHasCredentials();
-        
+
         // If fallback is requested but not available, and no biometrics are available, mark as unavailable
         if (useFallback && !fallbackAvailable && canAuthenticateResult != BiometricManager.BIOMETRIC_SUCCESS) {
             canAuthenticateResult = BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE;
@@ -507,7 +507,7 @@ public class NativeBiometric extends Plugin {
                 return 0; // UNKNOWN_ERROR
         }
     }
-    
+
     @PluginMethod
     public void getPluginVersion(final PluginCall call) {
         try {
