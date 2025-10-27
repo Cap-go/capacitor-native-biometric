@@ -85,6 +85,8 @@ This is a plugin specific list of error codes that can be thrown on verifyIdenti
 * [`getCredentials(...)`](#getcredentials)
 * [`setCredentials(...)`](#setcredentials)
 * [`deleteCredentials(...)`](#deletecredentials)
+* [`isCredentialsSaved(...)`](#iscredentialssaved)
+* [`getPluginVersion()`](#getpluginversion)
 * [Interfaces](#interfaces)
 * [Enums](#enums)
 
@@ -182,6 +184,40 @@ Deletes the stored credentials for a given server.
 --------------------
 
 
+### isCredentialsSaved(...)
+
+```typescript
+isCredentialsSaved(options: IsCredentialsSavedOptions) => Promise<IsCredentialsSavedResult>
+```
+
+Checks if credentials are already saved for a given server.
+
+| Param         | Type                                                                            |
+| ------------- | ------------------------------------------------------------------------------- |
+| **`options`** | <code><a href="#iscredentialssavedoptions">IsCredentialsSavedOptions</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#iscredentialssavedresult">IsCredentialsSavedResult</a>&gt;</code>
+
+**Since:** 7.3.0
+
+--------------------
+
+
+### getPluginVersion()
+
+```typescript
+getPluginVersion() => Promise<{ version: string; }>
+```
+
+Get the native Capacitor plugin version.
+
+**Returns:** <code>Promise&lt;{ version: string; }&gt;</code>
+
+**Since:** 1.0.0
+
+--------------------
+
+
 ### Interfaces
 
 
@@ -241,6 +277,20 @@ Deletes the stored credentials for a given server.
 
 
 #### DeleteCredentialOptions
+
+| Prop         | Type                |
+| ------------ | ------------------- |
+| **`server`** | <code>string</code> |
+
+
+#### IsCredentialsSavedResult
+
+| Prop          | Type                 |
+| ------------- | -------------------- |
+| **`isSaved`** | <code>boolean</code> |
+
+
+#### IsCredentialsSavedOptions
 
 | Prop         | Type                |
 | ------------ | ------------------- |

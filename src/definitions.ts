@@ -78,6 +78,14 @@ export interface DeleteCredentialOptions {
   server: string;
 }
 
+export interface IsCredentialsSavedOptions {
+  server: string;
+}
+
+export interface IsCredentialsSavedResult {
+  isSaved: boolean;
+}
+
 /**
  * Keep this in sync with BiometricAuthError in README.md
  * Update whenever `convertToPluginErrorCode` functions are modified
@@ -139,4 +147,20 @@ export interface NativeBiometricPlugin {
    * @since 1.0.0
    */
   deleteCredentials(options: DeleteCredentialOptions): Promise<void>;
+  /**
+   * Checks if credentials are already saved for a given server.
+   * @param {IsCredentialsSavedOptions} options
+   * @returns {Promise<IsCredentialsSavedResult>}
+   * @memberof NativeBiometricPlugin
+   * @since 7.3.0
+   */
+  isCredentialsSaved(options: IsCredentialsSavedOptions): Promise<IsCredentialsSavedResult>;
+
+  /**
+   * Get the native Capacitor plugin version.
+   *
+   * @returns Promise that resolves with the plugin version
+   * @since 1.0.0
+   */
+  getPluginVersion(): Promise<{ version: string }>;
 }

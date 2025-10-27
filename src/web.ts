@@ -7,6 +7,8 @@ import type {
   GetCredentialOptions,
   SetCredentialOptions,
   DeleteCredentialOptions,
+  IsCredentialsSavedOptions,
+  IsCredentialsSavedResult,
   Credentials,
 } from './definitions';
 
@@ -33,5 +35,13 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
   deleteCredentials(_options: DeleteCredentialOptions): Promise<void> {
     console.log('deleteCredentials', _options);
     throw new Error('Method not implemented.');
+  }
+  isCredentialsSaved(_options: IsCredentialsSavedOptions): Promise<IsCredentialsSavedResult> {
+    console.log('isCredentialsSaved', _options);
+    throw new Error('Method not implemented.');
+  }
+
+  async getPluginVersion(): Promise<{ version: string }> {
+    return { version: 'web' };
   }
 }

@@ -9,6 +9,7 @@ import LocalAuthentication
 
 @objc(NativeBiometricPlugin)
 public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
+    private let PLUGIN_VERSION: String = "7.4.1"
     public let identifier = "NativeBiometricPlugin"
     public let jsName = "NativeBiometric"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -16,7 +17,9 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "verifyIdentity", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getCredentials", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setCredentials", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "deleteCredentials", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "deleteCredentials", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "isCredentialsSaved", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
     ]
     struct Credentials {
         var username: String
@@ -164,6 +167,27 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
+    @objc func isCredentialsSaved(_ call: CAPPluginCall) {
+        guard let server = call.getString("server") else {
+            call.reject("No server name was provided")
+            return
+        }
+
+        var obj = JSObject()
+        obj["isSaved"] = checkCredentialsExist(server)
+        call.resolve(obj)
+    }
+
+    // Check if credentials exist in Keychain
+    func checkCredentialsExist(_ server: String) -> Bool {
+        let query: [String: Any] = [kSecClass as String: kSecClassInternetPassword,
+                                    kSecAttrServer as String: server,
+                                    kSecMatchLimit as String: kSecMatchLimitOne]
+
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        return status == errSecSuccess
+    }
+
     // Store user Credentials in Keychain
     func storeCredentialsInKeychain(_ credentials: Credentials, _ server: String) throws {
         let query: [String: Any] = [kSecClass as String: kSecClassInternetPassword,
@@ -270,5 +294,9 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         default:
             return 0
         }
+    }
+
+    @objc func getPluginVersion(_ call: CAPPluginCall) {
+        call.resolve(["version": self.PLUGIN_VERSION])
     }
 }

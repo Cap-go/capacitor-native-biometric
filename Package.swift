@@ -23,6 +23,6 @@ let package = Package(
         .testTarget(
             name: "NativeBiometricPluginTests",
             dependencies: ["NativeBiometricPlugin"],
-            path: "ios/Tests/NativeBiometricPluginTests")
+            path: "ios/Tests/CapgoNativeBiometricPluginTests")
     ]
 )

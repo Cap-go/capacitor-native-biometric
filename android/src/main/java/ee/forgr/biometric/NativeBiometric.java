@@ -51,6 +51,8 @@ import org.json.JSONException;
 @CapacitorPlugin(name = "NativeBiometric")
 public class NativeBiometric extends Plugin {
 
+    private final String PLUGIN_VERSION = "7.3.2";
+
     //protected final static int AUTH_CODE = 0102;
 
     private static final int NONE = 0;
@@ -316,6 +318,24 @@ public class NativeBiometric extends Plugin {
         }
     }
 
+    @PluginMethod
+    public void isCredentialsSaved(final PluginCall call) {
+        String KEY_ALIAS = call.getString("server", null);
+
+        if (KEY_ALIAS != null) {
+            SharedPreferences sharedPreferences = getContext()
+                .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE);
+            String username = sharedPreferences.getString(KEY_ALIAS + "-username", null);
+            String password = sharedPreferences.getString(KEY_ALIAS + "-password", null);
+
+            JSObject ret = new JSObject();
+            ret.put("isSaved", username != null && password != null);
+            call.resolve(ret);
+        } else {
+            call.reject("No server name was provided");
+        }
+    }
+
     private String encryptString(String stringToEncrypt, String KEY_ALIAS) throws GeneralSecurityException, IOException {
         Cipher cipher;
         cipher = Cipher.getInstance(TRANSFORMATION);
@@ -485,6 +505,17 @@ public class NativeBiometric extends Plugin {
                 return 1; // BIOMETRICS_UNAVAILABLE
             default:
                 return 0; // UNKNOWN_ERROR
+        }
+    }
+    
+    @PluginMethod
+    public void getPluginVersion(final PluginCall call) {
+        try {
+            final JSObject ret = new JSObject();
+            ret.put("version", this.PLUGIN_VERSION);
+            call.resolve(ret);
+        } catch (final Exception e) {
+            call.reject("Could not get plugin version", e);
         }
     }
 }
