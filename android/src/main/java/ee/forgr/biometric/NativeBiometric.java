@@ -70,13 +70,18 @@ public class NativeBiometric extends Plugin {
 
     private SharedPreferences encryptedSharedPreferences;
 
-    private int getAvailableFeature() {
+    private int getAvailableFeature(boolean useFallback) {
         // default to none
         BiometricManager biometricManager = BiometricManager.from(getContext());
 
         // Check for biometric capabilities
         int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
         int canAuthenticate = biometricManager.canAuthenticate(authenticators);
+        
+        // If fallback is enabled and strong biometrics not available, check weak biometrics (for devices like Samsung)
+        if (useFallback && canAuthenticate != BiometricManager.BIOMETRIC_SUCCESS) {
+            canAuthenticate = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK);
+        }
 
         if (canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS) {
             // Check specific features
@@ -87,18 +92,23 @@ public class NativeBiometric extends Plugin {
                 hasIris = pm.hasSystemFeature(PackageManager.FEATURE_IRIS);
             }
 
-            // For face, we rely on BiometricManager since it's more reliable
+            // For face, check if it's available
             boolean hasFace = false;
-            try {
-                // Try to create a face authentication prompt - if it succeeds, face auth is available
-                androidx.biometric.BiometricPrompt.PromptInfo promptInfo = new androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                    .setTitle("Test")
-                    .setNegativeButtonText("Cancel")
-                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                    .build();
-                hasFace = true;
-            } catch (Exception e) {
-                System.out.println("Error creating face authentication prompt: " + e.getMessage());
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Use system feature to check for face authentication
+                hasFace = pm.hasSystemFeature(PackageManager.FEATURE_FACE);
+            }
+            
+            // If fallback is enabled, also check for weak face authentication (like Samsung)
+            if (useFallback && !hasFace) {
+                try {
+                    int faceWeakTest = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK);
+                    if (faceWeakTest == BiometricManager.BIOMETRIC_SUCCESS) {
+                        hasFace = true;
+                    }
+                } catch (Exception e) {
+                    System.out.println("Error checking face authentication: " + e.getMessage());
+                }
             }
 
             // Determine the type based on available features
@@ -131,12 +141,10 @@ public class NativeBiometric extends Plugin {
         }
         int canAuthenticateResult = biometricManager.canAuthenticate(authenticators);
         
-        // If strong biometrics are not available, check for weak biometrics (for devices like Samsung with weak face auth)
-        if (canAuthenticateResult != BiometricManager.BIOMETRIC_SUCCESS) {
+        // If fallback is enabled and strong biometrics are not available, check for weak biometrics (for devices like Samsung with weak face auth)
+        if (useFallback && canAuthenticateResult != BiometricManager.BIOMETRIC_SUCCESS) {
             int weakAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK;
-            if (useFallback) {
-                weakAuthenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
-            }
+            weakAuthenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
             int weakResult = biometricManager.canAuthenticate(weakAuthenticators);
             if (weakResult == BiometricManager.BIOMETRIC_SUCCESS) {
                 canAuthenticateResult = BiometricManager.BIOMETRIC_SUCCESS;
@@ -162,7 +170,7 @@ public class NativeBiometric extends Plugin {
             ret.put("errorCode", pluginErrorCode);
         }
 
-        ret.put("biometryType", getAvailableFeature());
+        ret.put("biometryType", getAvailableFeature(useFallback));
         call.resolve(ret);
     }
 
