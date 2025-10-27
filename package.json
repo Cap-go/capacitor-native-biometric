@@ -1,6 +1,6 @@
 {
   "name": "@capgo/capacitor-native-biometric",
-  "version": "7.3.1",
+  "version": "7.3.2",
   "description": "This plugin gives access to the native biometric apis for android and iOS",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
