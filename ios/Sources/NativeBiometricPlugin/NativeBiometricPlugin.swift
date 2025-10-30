@@ -9,7 +9,7 @@ import LocalAuthentication
 
 @objc(NativeBiometricPlugin)
 public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
-    private let PLUGIN_VERSION: String = "7.4.2"
+    private let pluginVersion: String = "7.4.2"
     public let identifier = "NativeBiometricPlugin"
     public let jsName = "NativeBiometric"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -297,6 +297,6 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func getPluginVersion(_ call: CAPPluginCall) {
-        call.resolve(["version": self.PLUGIN_VERSION])
+        call.resolve(["version": self.pluginVersion])
     }
 }

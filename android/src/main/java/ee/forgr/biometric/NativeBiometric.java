@@ -51,7 +51,7 @@ import org.json.JSONException;
 @CapacitorPlugin(name = "NativeBiometric")
 public class NativeBiometric extends Plugin {
 
-    private final String PLUGIN_VERSION = "7.3.2";
+    private final String pluginVersion = "7.3.2";
 
     //protected final static int AUTH_CODE = 0102;
 
@@ -467,7 +467,7 @@ public class NativeBiometric extends Plugin {
     public void getPluginVersion(final PluginCall call) {
         try {
             final JSObject ret = new JSObject();
-            ret.put("version", this.PLUGIN_VERSION);
+            ret.put("version", this.pluginVersion);
             call.resolve(ret);
         } catch (final Exception e) {
             call.reject("Could not get plugin version", e);
