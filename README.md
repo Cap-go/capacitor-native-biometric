@@ -9,6 +9,19 @@
 
 Use biometrics confirm device owner presence or authenticate users. A couple of methods are provided to handle user credentials. These are securely stored using Keychain (iOS) and Keystore (Android).
 
+## Why Native Biometric?
+
+A **free**, **comprehensive** biometric authentication plugin with secure credential storage:
+
+- **All biometric types** - Face ID, Touch ID, Fingerprint, Face Authentication, Iris
+- **Secure credential storage** - Keychain (iOS) and Keystore (Android) integration
+- **Flexible fallback** - Optional passcode fallback when biometrics unavailable
+- **Customizable UI** - Full control over prompts, titles, descriptions, button text
+- **Detailed error codes** - Unified error handling across iOS and Android
+- **Modern package management** - Supports both Swift Package Manager (SPM) and CocoaPods (SPM-ready for Capacitor 8)
+
+Perfect for banking apps, password managers, authentication flows, and any app requiring secure user verification.
+
 ## Documentation
 
 The most complete doc is available here: https://capgo.app/docs/plugins/native-biometric/
