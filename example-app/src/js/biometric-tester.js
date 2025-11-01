@@ -1,4 +1,4 @@
-import { NativeBiometric } from '@capgo/capacitor-native-biometric';
+import { NativeBiometric, BiometryType } from '@capgo/capacitor-native-biometric';
 import { SplashScreen } from '@capacitor/splash-screen';
 
 // Simple function-based approach - no Web Components
@@ -80,6 +80,10 @@ function createBiometricTester() {
         border-radius: 4px;
         box-sizing: border-box;
       }
+      .form-group input[type="checkbox"] {
+        width: auto;
+        cursor: pointer;
+      }
       .credentials-display {
         background: #e9ecef;
         padding: 10px;
@@ -110,6 +114,12 @@ function createBiometricTester() {
     <div class="section">
       <h2>Biometric Status</h2>
       <div id="biometric-status" class="status">Checking...</div>
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="use-fallback-check" style="width: auto; margin-right: 8px;">
+          Use Fallback (passcode/PIN)
+        </label>
+      </div>
       <button class="button" id="check-availability">Check Availability</button>
       <div id="biometric-info" class="info" style="display: none;"></div>
     </div>
@@ -118,6 +128,7 @@ function createBiometricTester() {
       <h2>Authentication Test</h2>
       <button class="button" id="verify-identity">Verify Identity (Biometric)</button>
       <button class="button" id="verify-identity-fallback">Verify Identity (with Fallback)</button>
+      <button class="button" id="verify-identity-face">Verify Identity (Face Only)</button>
       <div id="auth-result"></div>
     </div>
 
@@ -167,8 +178,10 @@ function createBiometricTester() {
   // Add event listeners
   const elements = {
     checkAvailability: container.querySelector('#check-availability'),
+    useFallbackCheck: container.querySelector('#use-fallback-check'),
     verifyIdentity: container.querySelector('#verify-identity'),
     verifyIdentityFallback: container.querySelector('#verify-identity-fallback'),
+    verifyIdentityFace: container.querySelector('#verify-identity-face'),
     setCredentials: container.querySelector('#set-credentials'),
     getCredentials: container.querySelector('#get-credentials'),
     deleteCredentials: container.querySelector('#delete-credentials'),
@@ -219,6 +232,8 @@ function createBiometricTester() {
   elements.checkAvailability.addEventListener('click', checkAvailability);
   elements.verifyIdentity.addEventListener('click', () => verifyIdentity(false));
   elements.verifyIdentityFallback.addEventListener('click', () => verifyIdentity(true));
+  // Use FACE_AUTHENTICATION for Android (also handles FACE_ID on iOS)
+  elements.verifyIdentityFace.addEventListener('click', () => verifyIdentity(false, [BiometryType.FACE_AUTHENTICATION]));
   elements.setCredentials.addEventListener('click', setCredentials);
   elements.getCredentials.addEventListener('click', getCredentials);
   elements.deleteCredentials.addEventListener('click', deleteCredentials);
@@ -227,8 +242,9 @@ function createBiometricTester() {
   // Functions
   async function checkAvailability() {
     try {
-      addConsoleLog('INFO', ['Checking biometric availability...']);
-      const result = await NativeBiometric.isAvailable();
+      const useFallback = elements.useFallbackCheck.checked;
+      addConsoleLog('INFO', [`Checking biometric availability (useFallback: ${useFallback})...`]);
+      const result = await NativeBiometric.isAvailable({ useFallback });
       addConsoleLog('INFO', ['Availability result:', result]);
 
       if (result.isAvailable) {
@@ -249,13 +265,21 @@ function createBiometricTester() {
     }
   }
 
-  async function verifyIdentity(useFallback) {
+  async function verifyIdentity(useFallback, allowedBiometryTypes) {
     try {
-      addConsoleLog('INFO', [`Verifying identity (fallback: ${useFallback})...`]);
-      await NativeBiometric.verifyIdentity({
+      const options = {
         reason: 'Test biometric authentication',
         useFallback: useFallback
-      });
+      };
+      
+      if (allowedBiometryTypes) {
+        options.allowedBiometryTypes = allowedBiometryTypes;
+        addConsoleLog('INFO', [`Verifying identity (fallback: ${useFallback}, allowedTypes: ${allowedBiometryTypes.join(', ')})...`]);
+      } else {
+        addConsoleLog('INFO', [`Verifying identity (fallback: ${useFallback})...`]);
+      }
+      
+      await NativeBiometric.verifyIdentity(options);
       addConsoleLog('SUCCESS', ['✅ Identity verified successfully!']);
       showResult(elements.authResult, '✅ Identity verified successfully!', 'success');
     } catch (error) {
