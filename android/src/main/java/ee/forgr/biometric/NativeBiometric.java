@@ -84,7 +84,7 @@ public class NativeBiometric extends Plugin {
         // Check for biometric capabilities
         int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
         int canAuthenticate = biometricManager.canAuthenticate(authenticators);
-        
+
         // If fallback is enabled and strong biometrics not available, check weak biometrics (for devices like Samsung)
         if (useFallback && canAuthenticate != BiometricManager.BIOMETRIC_SUCCESS) {
             canAuthenticate = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK);
@@ -105,7 +105,7 @@ public class NativeBiometric extends Plugin {
                 // Use system feature to check for face authentication
                 hasFace = pm.hasSystemFeature(PackageManager.FEATURE_FACE);
             }
-            
+
             // If fallback is enabled, also check for weak face authentication (like Samsung)
             if (useFallback && !hasFace) {
                 try {
@@ -140,7 +140,7 @@ public class NativeBiometric extends Plugin {
         boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));
 
         BiometricManager biometricManager = BiometricManager.from(getContext());
-        
+
         // Check for strong biometrics first
         int strongAuthenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
         int strongResult = biometricManager.canAuthenticate(strongAuthenticators);
@@ -530,7 +530,7 @@ public class NativeBiometric extends Plugin {
                 return 0; // UNKNOWN_ERROR
         }
     }
-    
+
     @PluginMethod
     public void getPluginVersion(final PluginCall call) {
         try {
