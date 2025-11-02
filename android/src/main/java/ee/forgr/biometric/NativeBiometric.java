@@ -520,10 +520,14 @@ public class NativeBiometric extends Plugin {
             case BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE:
             case BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE:
                 return 1; // BIOMETRICS_UNAVAILABLE
+            case BiometricManager.BIOMETRIC_ERROR_LOCKOUT_PERMANENT:
+                return 2; // USER_LOCKOUT (permanent lockout)
             case BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED:
                 return 2; // USER_LOCKOUT
             case BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED:
                 return 3; // BIOMETRICS_NOT_ENROLLED
+            case BiometricManager.BIOMETRIC_ERROR_LOCKOUT:
+                return 4; // USER_TEMPORARY_LOCKOUT (temporary lockout, 30 seconds)
             case BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED:
                 return 1; // BIOMETRICS_UNAVAILABLE
             default:
