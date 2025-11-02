@@ -69,7 +69,7 @@ public class AuthActivity extends AppCompatActivity {
                 leftAuthenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
             }
         }
-        
+
         builder.setAllowedAuthenticators(leftAuthenticators);
 
         // Set negative button text if DEVICE_CREDENTIAL is not allowed
@@ -172,5 +172,4 @@ public class AuthActivity extends AppCompatActivity {
                 return 0;
         }
     }
-
 }
