@@ -60,7 +60,7 @@ public class NativeBiometric extends Plugin {
     private static final int FACE_AUTHENTICATION = 4;
     private static final int IRIS_AUTHENTICATION = 5;
     private static final int MULTIPLE = 6;
-    
+
     // AuthenticationStrength enum values
     private static final int AUTH_STRENGTH_NONE = 0;
     private static final int AUTH_STRENGTH_STRONG = 1;
@@ -145,19 +145,19 @@ public class NativeBiometric extends Plugin {
         int strongAuthenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
         int strongResult = biometricManager.canAuthenticate(strongAuthenticators);
         boolean hasStrongBiometric = (strongResult == BiometricManager.BIOMETRIC_SUCCESS);
-        
+
         // Check for weak biometrics
         int weakAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK;
         int weakResult = biometricManager.canAuthenticate(weakAuthenticators);
         boolean hasWeakBiometric = (weakResult == BiometricManager.BIOMETRIC_SUCCESS);
-        
+
         // Check if device has credentials (PIN/pattern/password)
         boolean fallbackAvailable = useFallback && this.deviceHasCredentials();
-        
+
         // Determine authentication strength
         int authenticationStrength = AUTH_STRENGTH_NONE;
         boolean isAvailable = false;
-        
+
         if (hasStrongBiometric) {
             // Strong biometric available (fingerprints on devices that consider them strong)
             authenticationStrength = AUTH_STRENGTH_STRONG;
@@ -172,11 +172,11 @@ public class NativeBiometric extends Plugin {
             authenticationStrength = AUTH_STRENGTH_WEAK;
             isAvailable = true;
         }
-        
+
         // Handle error codes when authentication is not available
         if (!isAvailable) {
             int biometricManagerErrorCode;
-            
+
             // Prefer the error from strong biometric check if it failed
             if (strongResult != BiometricManager.BIOMETRIC_SUCCESS) {
                 biometricManagerErrorCode = strongResult;
@@ -190,7 +190,7 @@ public class NativeBiometric extends Plugin {
                 // use the constant rather than assuming its numeric value.
                 biometricManagerErrorCode = BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE;
             }
-            
+
             // Convert BiometricManager error codes to plugin error codes
             int pluginErrorCode = convertBiometricManagerErrorToPluginError(biometricManagerErrorCode);
             ret.put("errorCode", pluginErrorCode);

@@ -120,7 +120,7 @@ export interface IsCredentialsSavedResult {
 /**
  * Biometric authentication error codes.
  * These error codes are used in both isAvailable() and verifyIdentity() methods.
- * 
+ *
  * Keep this in sync with BiometricAuthError in README.md
  * Update whenever `convertToPluginErrorCode` functions are modified
  */
