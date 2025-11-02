@@ -15,6 +15,23 @@ export enum BiometryType {
   MULTIPLE = 6,
 }
 
+export enum AuthenticationStrength {
+  /**
+   * No authentication available, even if PIN is available but useFallback = false
+   */
+  NONE = 0,
+  /**
+   * Strong authentication: Face ID on iOS, fingerprints on devices that consider fingerprints strong (Android).
+   * Note: PIN/pattern/password is NEVER considered STRONG, even when useFallback = true.
+   */
+  STRONG = 1,
+  /**
+   * Weak authentication: Face authentication on Android devices that consider face weak,
+   * or PIN/pattern/password if useFallback = true (PIN is always WEAK, never STRONG).
+   */
+  WEAK = 2,
+}
+
 export interface Credentials {
   username: string;
   password: string;
@@ -27,10 +44,24 @@ export interface IsAvailableOptions {
   useFallback: boolean;
 }
 
+/**
+ * Result from isAvailable() method indicating biometric authentication availability.
+ */
 export interface AvailableResult {
+  /**
+   * Whether authentication is available (biometric or fallback if useFallback is true)
+   */
   isAvailable: boolean;
-  biometryType: BiometryType;
-  errorCode?: number;
+  /**
+   * The strength of available authentication method (STRONG, WEAK, or NONE)
+   */
+  authenticationStrength: AuthenticationStrength;
+  /**
+   * Error code from BiometricAuthError enum. Only present when isAvailable is false.
+   * Indicates why biometric authentication is not available.
+   * @see BiometricAuthError
+   */
+  errorCode?: BiometricAuthError;
 }
 
 export interface BiometricOptions {
@@ -56,12 +87,12 @@ export interface BiometricOptions {
    */
   maxAttempts?: number;
   /**
-   * Only for Android.
-   * Specify which biometry types are allowed for authentication.
-   * If not specified, all available types will be allowed.
-   * @example [BiometryType.FINGERPRINT, BiometryType.FACE_AUTHENTICATION]
+   * Specify the authentication strength required.
+   * - STRONG: Only strong biometrics (fingerprints, Face ID, etc.)
+   * - WEAK: Weak biometrics (face on Android devices that classify it as weak) OR PIN/password
+   * If not specified, defaults to allowing both strong and weak biometrics.
    */
-  allowedBiometryTypes?: BiometryType[];
+  requiredStrength?: AuthenticationStrength;
 }
 
 export interface GetCredentialOptions {
@@ -87,22 +118,76 @@ export interface IsCredentialsSavedResult {
 }
 
 /**
+ * Biometric authentication error codes.
+ * These error codes are used in both isAvailable() and verifyIdentity() methods.
+ * 
  * Keep this in sync with BiometricAuthError in README.md
  * Update whenever `convertToPluginErrorCode` functions are modified
  */
 export enum BiometricAuthError {
+  /**
+   * Unknown error occurred
+   */
   UNKNOWN_ERROR = 0,
+  /**
+   * Biometrics are unavailable (no hardware or hardware error)
+   * Platform: Android, iOS
+   */
   BIOMETRICS_UNAVAILABLE = 1,
+  /**
+   * User has been locked out due to too many failed attempts
+   * Platform: Android, iOS
+   */
   USER_LOCKOUT = 2,
+  /**
+   * No biometrics are enrolled on the device
+   * Platform: Android, iOS
+   */
   BIOMETRICS_NOT_ENROLLED = 3,
+  /**
+   * User is temporarily locked out (Android: 30 second lockout)
+   * Platform: Android
+   */
   USER_TEMPORARY_LOCKOUT = 4,
+  /**
+   * Authentication failed (user did not authenticate successfully)
+   * Platform: Android, iOS
+   */
   AUTHENTICATION_FAILED = 10,
+  /**
+   * App canceled the authentication (iOS only)
+   * Platform: iOS
+   */
   APP_CANCEL = 11,
+  /**
+   * Invalid context (iOS only)
+   * Platform: iOS
+   */
   INVALID_CONTEXT = 12,
+  /**
+   * Authentication was not interactive (iOS only)
+   * Platform: iOS
+   */
   NOT_INTERACTIVE = 13,
+  /**
+   * Passcode/PIN is not set on the device
+   * Platform: Android, iOS
+   */
   PASSCODE_NOT_SET = 14,
+  /**
+   * System canceled the authentication (e.g., due to screen lock)
+   * Platform: Android, iOS
+   */
   SYSTEM_CANCEL = 15,
+  /**
+   * User canceled the authentication
+   * Platform: Android, iOS
+   */
   USER_CANCEL = 16,
+  /**
+   * User chose to use fallback authentication method
+   * Platform: Android, iOS
+   */
   USER_FALLBACK = 17,
 }
 

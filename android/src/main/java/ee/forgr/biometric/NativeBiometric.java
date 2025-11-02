@@ -60,6 +60,11 @@ public class NativeBiometric extends Plugin {
     private static final int FACE_AUTHENTICATION = 4;
     private static final int IRIS_AUTHENTICATION = 5;
     private static final int MULTIPLE = 6;
+    
+    // AuthenticationStrength enum values
+    private static final int AUTH_STRENGTH_NONE = 0;
+    private static final int AUTH_STRENGTH_STRONG = 1;
+    private static final int AUTH_STRENGTH_WEAK = 2;
 
     private KeyStore keyStore;
     private static final String ANDROID_KEY_STORE = "AndroidKeyStore";
@@ -137,42 +142,62 @@ public class NativeBiometric extends Plugin {
         BiometricManager biometricManager = BiometricManager.from(getContext());
         
         // Check for strong biometrics first
-        int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
-        if (useFallback) {
-            authenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
-        }
-        int canAuthenticateResult = biometricManager.canAuthenticate(authenticators);
+        int strongAuthenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
+        int strongResult = biometricManager.canAuthenticate(strongAuthenticators);
+        boolean hasStrongBiometric = (strongResult == BiometricManager.BIOMETRIC_SUCCESS);
         
-        // If fallback is enabled and strong biometrics are not available, check for weak biometrics (for devices like Samsung with weak face auth)
-        if (useFallback && canAuthenticateResult != BiometricManager.BIOMETRIC_SUCCESS) {
-            int weakAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK;
-            weakAuthenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
-            int weakResult = biometricManager.canAuthenticate(weakAuthenticators);
-            if (weakResult == BiometricManager.BIOMETRIC_SUCCESS) {
-                canAuthenticateResult = BiometricManager.BIOMETRIC_SUCCESS;
-            }
-        }
+        // Check for weak biometrics
+        int weakAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK;
+        int weakResult = biometricManager.canAuthenticate(weakAuthenticators);
+        boolean hasWeakBiometric = (weakResult == BiometricManager.BIOMETRIC_SUCCESS);
         
-        // Using deviceHasCredentials instead of canAuthenticate(DEVICE_CREDENTIAL)
-        // > "Developers that wish to check for the presence of a PIN, pattern, or password on these versions should instead use isDeviceSecure."
-        // @see https://developer.android.com/reference/androidx/biometric/BiometricManager#canAuthenticate(int)
+        // Check if device has credentials (PIN/pattern/password)
         boolean fallbackAvailable = useFallback && this.deviceHasCredentials();
         
-        // If fallback is requested but not available, and no biometrics are available, mark as unavailable
-        if (useFallback && !fallbackAvailable && canAuthenticateResult != BiometricManager.BIOMETRIC_SUCCESS) {
-            canAuthenticateResult = BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE;
+        // Determine authentication strength
+        int authenticationStrength = AUTH_STRENGTH_NONE;
+        boolean isAvailable = false;
+        
+        if (hasStrongBiometric) {
+            // Strong biometric available (fingerprints on devices that consider them strong)
+            authenticationStrength = AUTH_STRENGTH_STRONG;
+            isAvailable = true;
+        } else if (hasWeakBiometric) {
+            // Only weak biometric available (face on devices that consider it weak)
+            authenticationStrength = AUTH_STRENGTH_WEAK;
+            isAvailable = true;
+        } else if (fallbackAvailable) {
+            // No biometrics but fallback (PIN/pattern/password) is available
+            // PIN/pattern/password is ALWAYS considered WEAK, never STRONG
+            authenticationStrength = AUTH_STRENGTH_WEAK;
+            isAvailable = true;
         }
-
-        boolean isAvailable = (canAuthenticateResult == BiometricManager.BIOMETRIC_SUCCESS || fallbackAvailable);
-        ret.put("isAvailable", isAvailable);
-
+        
+        // Handle error codes when authentication is not available
         if (!isAvailable) {
+            int biometricManagerErrorCode;
+            
+            // Prefer the error from strong biometric check if it failed
+            if (strongResult != BiometricManager.BIOMETRIC_SUCCESS) {
+                biometricManagerErrorCode = strongResult;
+            } else if (weakResult != BiometricManager.BIOMETRIC_SUCCESS) {
+                // Otherwise use error from weak biometric check if it failed
+                biometricManagerErrorCode = weakResult;
+            } else {
+                // No biometrics available at all
+                // BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE indicates that biometric hardware is unavailable
+                // or cannot be accessed. This constant value may vary across Android versions, so we explicitly
+                // use the constant rather than assuming its numeric value.
+                biometricManagerErrorCode = BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE;
+            }
+            
             // Convert BiometricManager error codes to plugin error codes
-            int pluginErrorCode = convertBiometricManagerErrorToPluginError(canAuthenticateResult);
+            int pluginErrorCode = convertBiometricManagerErrorToPluginError(biometricManagerErrorCode);
             ret.put("errorCode", pluginErrorCode);
         }
 
-        ret.put("biometryType", getAvailableFeature(useFallback));
+        ret.put("isAvailable", isAvailable);
+        ret.put("authenticationStrength", authenticationStrength);
         call.resolve(ret);
     }
 
@@ -202,14 +227,12 @@ public class NativeBiometric extends Plugin {
             intent.putExtra("maxAttempts", maxAttempts);
         }
 
-        // Pass allowed biometry types
-        JSArray allowedTypes = call.getArray("allowedBiometryTypes");
-        if (allowedTypes != null) {
-            int[] types = new int[allowedTypes.length()];
-            for (int i = 0; i < allowedTypes.length(); i++) {
-                types[i] = (int) allowedTypes.toList().get(i);
-            }
-            intent.putExtra("allowedBiometryTypes", types);
+        // Pass required authentication strength
+        // Note: getInt returns null if not provided, so check for null
+        // 0 = NONE, 1 = STRONG, 2 = WEAK
+        Integer requiredStrength = call.getInt("requiredStrength");
+        if (requiredStrength != null) {
+            intent.putExtra("requiredStrength", requiredStrength.intValue());
         }
 
         boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));

@@ -223,11 +223,13 @@ Get the native Capacitor plugin version.
 
 #### AvailableResult
 
-| Prop               | Type                                                  |
-| ------------------ | ----------------------------------------------------- |
-| **`isAvailable`**  | <code>boolean</code>                                  |
-| **`biometryType`** | <code><a href="#biometrytype">BiometryType</a></code> |
-| **`errorCode`**    | <code>number</code>                                   |
+Result from isAvailable() method indicating biometric authentication availability.
+
+| Prop                         | Type                                                                      | Description                                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`isAvailable`**            | <code>boolean</code>                                                      | Whether authentication is available (biometric or fallback if useFallback is true)                                                                                          |
+| **`authenticationStrength`** | <code><a href="#authenticationstrength">AuthenticationStrength</a></code> | The strength of available authentication method (STRONG, WEAK, or NONE)                                                                                                     |
+| **`errorCode`**              | <code><a href="#biometricautherror">BiometricAuthError</a></code>         | Error code from <a href="#biometricautherror">BiometricAuthError</a> enum. Only present when isAvailable is false. Indicates why biometric authentication is not available. |
 
 
 #### IsAvailableOptions
@@ -239,17 +241,17 @@ Get the native Capacitor plugin version.
 
 #### BiometricOptions
 
-| Prop                       | Type                        | Description                                                                                                                                                | Default        |
-| -------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| **`reason`**               | <code>string</code>         |                                                                                                                                                            |                |
-| **`title`**                | <code>string</code>         |                                                                                                                                                            |                |
-| **`subtitle`**             | <code>string</code>         |                                                                                                                                                            |                |
-| **`description`**          | <code>string</code>         |                                                                                                                                                            |                |
-| **`negativeButtonText`**   | <code>string</code>         |                                                                                                                                                            |                |
-| **`useFallback`**          | <code>boolean</code>        | Specifies if should fallback to passcode authentication if biometric authentication fails.                                                                 |                |
-| **`fallbackTitle`**        | <code>string</code>         | Only for iOS. Set the text for the fallback button in the authentication dialog. If this property is not specified, the default text is set by the system. |                |
-| **`maxAttempts`**          | <code>number</code>         | Only for Android. Set a maximum number of attempts for biometric authentication. The maximum allowed by android is 5.                                      | <code>1</code> |
-| **`allowedBiometryTypes`** | <code>BiometryType[]</code> | Only for Android. Specify which biometry types are allowed for authentication. If not specified, all available types will be allowed.                      |                |
+| Prop                     | Type                                                                      | Description                                                                                                                                                                                                                                                                     | Default        |
+| ------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **`reason`**             | <code>string</code>                                                       |                                                                                                                                                                                                                                                                                 |                |
+| **`title`**              | <code>string</code>                                                       |                                                                                                                                                                                                                                                                                 |                |
+| **`subtitle`**           | <code>string</code>                                                       |                                                                                                                                                                                                                                                                                 |                |
+| **`description`**        | <code>string</code>                                                       |                                                                                                                                                                                                                                                                                 |                |
+| **`negativeButtonText`** | <code>string</code>                                                       |                                                                                                                                                                                                                                                                                 |                |
+| **`useFallback`**        | <code>boolean</code>                                                      | Specifies if should fallback to passcode authentication if biometric authentication fails.                                                                                                                                                                                      |                |
+| **`fallbackTitle`**      | <code>string</code>                                                       | Only for iOS. Set the text for the fallback button in the authentication dialog. If this property is not specified, the default text is set by the system.                                                                                                                      |                |
+| **`maxAttempts`**        | <code>number</code>                                                       | Only for Android. Set a maximum number of attempts for biometric authentication. The maximum allowed by android is 5.                                                                                                                                                           | <code>1</code> |
+| **`requiredStrength`**   | <code><a href="#authenticationstrength">AuthenticationStrength</a></code> | Specify the authentication strength required. - STRONG: Only strong biometrics (fingerprints, Face ID, etc.) - WEAK: Weak biometrics (face on Android devices that classify it as weak) OR PIN/password If not specified, defaults to allowing both strong and weak biometrics. |                |
 
 
 #### Credentials
@@ -300,17 +302,32 @@ Get the native Capacitor plugin version.
 ### Enums
 
 
-#### BiometryType
+#### AuthenticationStrength
 
-| Members                   | Value          |
-| ------------------------- | -------------- |
-| **`NONE`**                | <code>0</code> |
-| **`TOUCH_ID`**            | <code>1</code> |
-| **`FACE_ID`**             | <code>2</code> |
-| **`FINGERPRINT`**         | <code>3</code> |
-| **`FACE_AUTHENTICATION`** | <code>4</code> |
-| **`IRIS_AUTHENTICATION`** | <code>5</code> |
-| **`MULTIPLE`**            | <code>6</code> |
+| Members      | Value          | Description                                                                                                                                                                                      |
+| ------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`NONE`**   | <code>0</code> | No authentication available, even if PIN is available but useFallback = false                                                                                                                    |
+| **`STRONG`** | <code>1</code> | Strong authentication: Face ID on iOS, fingerprints on devices that consider fingerprints strong (Android). Note: PIN/pattern/password is NEVER considered STRONG, even when useFallback = true. |
+| **`WEAK`**   | <code>2</code> | Weak authentication: Face authentication on Android devices that consider face weak, or PIN/pattern/password if useFallback = true (PIN is always WEAK, never STRONG).                           |
+
+
+#### BiometricAuthError
+
+| Members                       | Value           | Description                                                                           |
+| ----------------------------- | --------------- | ------------------------------------------------------------------------------------- |
+| **`UNKNOWN_ERROR`**           | <code>0</code>  | Unknown error occurred                                                                |
+| **`BIOMETRICS_UNAVAILABLE`**  | <code>1</code>  | Biometrics are unavailable (no hardware or hardware error) Platform: Android, iOS     |
+| **`USER_LOCKOUT`**            | <code>2</code>  | User has been locked out due to too many failed attempts Platform: Android, iOS       |
+| **`BIOMETRICS_NOT_ENROLLED`** | <code>3</code>  | No biometrics are enrolled on the device Platform: Android, iOS                       |
+| **`USER_TEMPORARY_LOCKOUT`**  | <code>4</code>  | User is temporarily locked out (Android: 30 second lockout) Platform: Android         |
+| **`AUTHENTICATION_FAILED`**   | <code>10</code> | Authentication failed (user did not authenticate successfully) Platform: Android, iOS |
+| **`APP_CANCEL`**              | <code>11</code> | App canceled the authentication (iOS only) Platform: iOS                              |
+| **`INVALID_CONTEXT`**         | <code>12</code> | Invalid context (iOS only) Platform: iOS                                              |
+| **`NOT_INTERACTIVE`**         | <code>13</code> | Authentication was not interactive (iOS only) Platform: iOS                           |
+| **`PASSCODE_NOT_SET`**        | <code>14</code> | Passcode/PIN is not set on the device Platform: Android, iOS                          |
+| **`SYSTEM_CANCEL`**           | <code>15</code> | System canceled the authentication (e.g., due to screen lock) Platform: Android, iOS  |
+| **`USER_CANCEL`**             | <code>16</code> | User canceled the authentication Platform: Android, iOS                               |
+| **`USER_FALLBACK`**           | <code>17</code> | User chose to use fallback authentication method Platform: Android, iOS               |
 
 </docgen-api>
 ## Face ID (iOS)

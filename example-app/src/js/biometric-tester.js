@@ -1,4 +1,4 @@
-import { NativeBiometric, BiometryType } from '@capgo/capacitor-native-biometric';
+import { NativeBiometric, BiometryType, AuthenticationStrength } from '@capgo/capacitor-native-biometric';
 import { SplashScreen } from '@capacitor/splash-screen';
 
 // Simple function-based approach - no Web Components
@@ -128,7 +128,8 @@ function createBiometricTester() {
       <h2>Authentication Test</h2>
       <button class="button" id="verify-identity">Verify Identity (Biometric)</button>
       <button class="button" id="verify-identity-fallback">Verify Identity (with Fallback)</button>
-      <button class="button" id="verify-identity-face">Verify Identity (Face Only)</button>
+      <button class="button" id="verify-identity-strong">Verify Identity (STRONG only)</button>
+      <button class="button" id="verify-identity-weak">Verify Identity (WEAK only)</button>
       <div id="auth-result"></div>
     </div>
 
@@ -181,7 +182,6 @@ function createBiometricTester() {
     useFallbackCheck: container.querySelector('#use-fallback-check'),
     verifyIdentity: container.querySelector('#verify-identity'),
     verifyIdentityFallback: container.querySelector('#verify-identity-fallback'),
-    verifyIdentityFace: container.querySelector('#verify-identity-face'),
     setCredentials: container.querySelector('#set-credentials'),
     getCredentials: container.querySelector('#get-credentials'),
     deleteCredentials: container.querySelector('#delete-credentials'),
@@ -232,8 +232,10 @@ function createBiometricTester() {
   elements.checkAvailability.addEventListener('click', checkAvailability);
   elements.verifyIdentity.addEventListener('click', () => verifyIdentity(false));
   elements.verifyIdentityFallback.addEventListener('click', () => verifyIdentity(true));
-  // Use FACE_AUTHENTICATION for Android (also handles FACE_ID on iOS)
-  elements.verifyIdentityFace.addEventListener('click', () => verifyIdentity(false, [BiometryType.FACE_AUTHENTICATION]));
+  elements.verifyIdentityStrong = container.querySelector('#verify-identity-strong');
+  elements.verifyIdentityWeak = container.querySelector('#verify-identity-weak');
+  elements.verifyIdentityStrong.addEventListener('click', () => verifyIdentity(false, AuthenticationStrength.STRONG));
+  elements.verifyIdentityWeak.addEventListener('click', () => verifyIdentity(false, AuthenticationStrength.WEAK));
   elements.setCredentials.addEventListener('click', setCredentials);
   elements.getCredentials.addEventListener('click', getCredentials);
   elements.deleteCredentials.addEventListener('click', deleteCredentials);
@@ -248,10 +250,11 @@ function createBiometricTester() {
       addConsoleLog('INFO', ['Availability result:', result]);
 
       if (result.isAvailable) {
-        elements.biometricStatus.textContent = `✅ Biometrics Available (${getBiometryTypeName(result.biometryType)})`;
+        const strengthName = getAuthenticationStrengthName(result.authenticationStrength);
+        elements.biometricStatus.textContent = `✅ Biometrics Available (${strengthName})`;
         elements.biometricStatus.className = 'status available';
         elements.biometricInfo.style.display = 'block';
-        elements.biometricInfo.innerHTML = `<strong>Biometry Type:</strong> ${getBiometryTypeName(result.biometryType)} (${result.biometryType})`;
+        elements.biometricInfo.innerHTML = `<strong>Authentication Strength:</strong> ${strengthName} (${result.authenticationStrength})`;
       } else {
         elements.biometricStatus.textContent = `❌ Biometrics Not Available (Error: ${result.errorCode || 'Unknown'})`;
         elements.biometricStatus.className = 'status unavailable';
@@ -265,16 +268,17 @@ function createBiometricTester() {
     }
   }
 
-  async function verifyIdentity(useFallback, allowedBiometryTypes) {
+  async function verifyIdentity(useFallback, requiredStrength) {
     try {
       const options = {
         reason: 'Test biometric authentication',
         useFallback: useFallback
       };
       
-      if (allowedBiometryTypes) {
-        options.allowedBiometryTypes = allowedBiometryTypes;
-        addConsoleLog('INFO', [`Verifying identity (fallback: ${useFallback}, allowedTypes: ${allowedBiometryTypes.join(', ')})...`]);
+      if (requiredStrength !== undefined) {
+        options.requiredStrength = requiredStrength;
+        const strengthName = getAuthenticationStrengthName(requiredStrength);
+        addConsoleLog('INFO', [`Verifying identity (fallback: ${useFallback}, requiredStrength: ${strengthName})...`]);
       } else {
         addConsoleLog('INFO', [`Verifying identity (fallback: ${useFallback})...`]);
       }
@@ -402,6 +406,15 @@ function createBiometricTester() {
       6: 'Multiple'
     };
     return names[type] || 'Unknown';
+  }
+
+  function getAuthenticationStrengthName(strength) {
+    const names = {
+      [AuthenticationStrength.NONE]: 'None',
+      [AuthenticationStrength.STRONG]: 'Strong',
+      [AuthenticationStrength.WEAK]: 'Weak'
+    };
+    return names[strength] || 'Unknown';
   }
 
   // Initialize
