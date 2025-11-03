@@ -43,19 +43,39 @@ public class AuthActivity extends AppCompatActivity {
             .setDescription(getIntent().hasExtra("description") ? getIntent().getStringExtra("description") : null);
 
         boolean useFallback = getIntent().getBooleanExtra("useFallback", false);
-        int[] allowedTypes = getIntent().getIntArrayExtra("allowedBiometryTypes");
+        int requiredStrength = getIntent().getIntExtra("requiredStrength", -1);
 
-        int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
-        if (useFallback) {
-            authenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+        int leftAuthenticators;
+        // AuthenticationStrength enum: NONE = 0, STRONG = 1, WEAK = 2
+        // -1 means not specified, default to allowing both STRONG and WEAK
+        if (requiredStrength == 2) {
+            // WEAK: Weak biometrics OR PIN/password
+            // CRITICAL: ONLY use BIOMETRIC_WEAK - NEVER include BIOMETRIC_STRONG
+            // This prevents Android from trying fingerprints when only weak biometrics are requested
+            leftAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK;
+            if (useFallback) {
+                leftAuthenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+            }
+        } else if (requiredStrength == 1) {
+            // STRONG: Only strong biometrics (fingerprints, Face ID on iOS)
+            leftAuthenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
+            if (useFallback) {
+                leftAuthenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+            }
+        } else {
+            // Default (-1 or invalid): allow both STRONG and WEAK biometrics
+            leftAuthenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG | BiometricManager.Authenticators.BIOMETRIC_WEAK;
+            if (useFallback) {
+                leftAuthenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+            }
         }
-        if (allowedTypes != null) {
-            // Filter authenticators based on allowed types
-            authenticators = getAllowedAuthenticators(allowedTypes);
-        }
-        builder.setAllowedAuthenticators(authenticators);
 
-        if (!useFallback) {
+        builder.setAllowedAuthenticators(leftAuthenticators);
+
+        // Set negative button text if DEVICE_CREDENTIAL is not allowed
+        // When allowedAuthenticators includes DEVICE_CREDENTIAL, negative button text must not be set
+        boolean deviceCredentialAllowed = (leftAuthenticators & BiometricManager.Authenticators.DEVICE_CREDENTIAL) != 0;
+        if (!deviceCredentialAllowed) {
             String negativeText = getIntent().getStringExtra("negativeButtonText");
             builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
         }
@@ -151,23 +171,5 @@ public class AuthActivity extends AppCompatActivity {
             default:
                 return 0;
         }
-    }
-
-    private int getAllowedAuthenticators(int[] allowedTypes) {
-        int authenticators = 0;
-        for (int type : allowedTypes) {
-            switch (type) {
-                case 3: // FINGERPRINT
-                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
-                    break;
-                case 4: // FACE_AUTHENTICATION
-                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
-                    break;
-                case 5: // IRIS_AUTHENTICATION
-                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
-                    break;
-            }
-        }
-        return authenticators > 0 ? authenticators : BiometricManager.Authenticators.BIOMETRIC_STRONG;
     }
 }

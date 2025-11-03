@@ -94,7 +94,7 @@
     </div>
 
     <script type="module">
-        import { NativeBiometric } from '@capgo/capacitor-native-biometric';
+        import { NativeBiometric, AuthenticationStrength } from '@capgo/capacitor-native-biometric';
         import { SplashScreen } from '@capacitor/splash-screen';
 
         // Override console to show logs
@@ -169,7 +169,7 @@
                 const div = document.createElement('div');
                 div.className = result.isAvailable ? 'result success' : 'result error';
                 div.textContent = result.isAvailable
-                    ? `✅ Biometrics Available: ${getBiometryName(result.biometryType)}`
+                    ? `✅ Biometrics Available: ${getAuthenticationStrengthName(result.authenticationStrength)}`
                     : `❌ Biometrics Not Available (Error: ${result.errorCode})`;
                 document.getElementById('other-results').appendChild(div);
             } catch (error) {
@@ -233,6 +233,15 @@
                 6: 'Multiple'
             };
             return names[type] || 'Unknown';
+        }
+
+        function getAuthenticationStrengthName(strength) {
+            const names = {
+                [AuthenticationStrength.NONE]: 'None',
+                [AuthenticationStrength.STRONG]: 'Strong',
+                [AuthenticationStrength.WEAK]: 'Weak'
+            };
+            return names[strength] || 'Unknown';
         }
 
         // Hide splash screen

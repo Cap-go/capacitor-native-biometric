@@ -17,7 +17,10 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
     super();
   }
   isAvailable(): Promise<AvailableResult> {
-    throw new Error('Method not implemented.');
+    return Promise.resolve({
+      isAvailable: false,
+      authenticationStrength: 0, // NONE
+    });
   }
 
   verifyIdentity(_options?: BiometricOptions): Promise<void> {
