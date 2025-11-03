@@ -1,4 +1,4 @@
-import { NativeBiometric } from '@capgo/capacitor-native-biometric';
+import { NativeBiometric, AuthenticationStrength } from '@capgo/capacitor-native-biometric';
 import { SplashScreen } from '@capacitor/splash-screen';
 
 // Simple function-based approach - no Web Components
@@ -110,6 +110,12 @@ function createBiometricTester() {
     <div class="section">
       <h2>Biometric Status</h2>
       <div id="biometric-status" class="status">Checking...</div>
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="use-fallback-check" style="width: auto; margin-right: 8px;">
+          Use Fallback (passcode/PIN)
+        </label>
+      </div>
       <button class="button" id="check-availability">Check Availability</button>
       <div id="biometric-info" class="info" style="display: none;"></div>
     </div>
@@ -167,6 +173,7 @@ function createBiometricTester() {
   // Add event listeners
   const elements = {
     checkAvailability: container.querySelector('#check-availability'),
+    useFallbackCheck: container.querySelector('#use-fallback-check'),
     verifyIdentity: container.querySelector('#verify-identity'),
     verifyIdentityFallback: container.querySelector('#verify-identity-fallback'),
     setCredentials: container.querySelector('#set-credentials'),
@@ -227,15 +234,17 @@ function createBiometricTester() {
   // Functions
   async function checkAvailability() {
     try {
-      addConsoleLog('INFO', ['Checking biometric availability...']);
-      const result = await NativeBiometric.isAvailable();
+      const useFallback = elements.useFallbackCheck.checked;
+      addConsoleLog('INFO', [`Checking biometric availability (useFallback: ${useFallback})...`]);
+      const result = await NativeBiometric.isAvailable({ useFallback });
       addConsoleLog('INFO', ['Availability result:', result]);
 
       if (result.isAvailable) {
-        elements.biometricStatus.textContent = `✅ Biometrics Available (${getBiometryTypeName(result.biometryType)})`;
+        const strengthName = getAuthenticationStrengthName(result.authenticationStrength);
+        elements.biometricStatus.textContent = `✅ Biometrics Available (${strengthName})`;
         elements.biometricStatus.className = 'status available';
         elements.biometricInfo.style.display = 'block';
-        elements.biometricInfo.innerHTML = `<strong>Biometry Type:</strong> ${getBiometryTypeName(result.biometryType)} (${result.biometryType})`;
+        elements.biometricInfo.innerHTML = `<strong>Authentication Strength:</strong> ${strengthName} (${result.authenticationStrength})`;
       } else {
         elements.biometricStatus.textContent = `❌ Biometrics Not Available (Error: ${result.errorCode || 'Unknown'})`;
         elements.biometricStatus.className = 'status unavailable';
@@ -367,17 +376,13 @@ function createBiometricTester() {
     }
   }
 
-  function getBiometryTypeName(type) {
+  function getAuthenticationStrengthName(strength) {
     const names = {
-      0: 'None',
-      1: 'Touch ID',
-      2: 'Face ID',
-      3: 'Fingerprint',
-      4: 'Face Authentication',
-      5: 'Iris Authentication',
-      6: 'Multiple'
+      [AuthenticationStrength.NONE]: 'None',
+      [AuthenticationStrength.STRONG]: 'Strong',
+      [AuthenticationStrength.WEAK]: 'Weak'
     };
-    return names[type] || 'Unknown';
+    return names[strength] || 'Unknown';
   }
 
   // Initialize

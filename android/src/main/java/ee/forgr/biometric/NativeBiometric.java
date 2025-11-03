@@ -61,6 +61,11 @@ public class NativeBiometric extends Plugin {
     private static final int IRIS_AUTHENTICATION = 5;
     private static final int MULTIPLE = 6;
 
+    // AuthenticationStrength enum values
+    private static final int AUTH_STRENGTH_NONE = 0;
+    private static final int AUTH_STRENGTH_STRONG = 1;
+    private static final int AUTH_STRENGTH_WEAK = 2;
+
     private KeyStore keyStore;
     private static final String ANDROID_KEY_STORE = "AndroidKeyStore";
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
@@ -72,52 +77,6 @@ public class NativeBiometric extends Plugin {
 
     private SharedPreferences encryptedSharedPreferences;
 
-    private int getAvailableFeature() {
-        // default to none
-        BiometricManager biometricManager = BiometricManager.from(getContext());
-
-        // Check for biometric capabilities
-        int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
-        int canAuthenticate = biometricManager.canAuthenticate(authenticators);
-
-        if (canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS) {
-            // Check specific features
-            PackageManager pm = getContext().getPackageManager();
-            boolean hasFinger = pm.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT);
-            boolean hasIris = false;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                hasIris = pm.hasSystemFeature(PackageManager.FEATURE_IRIS);
-            }
-
-            // For face, we rely on BiometricManager since it's more reliable
-            boolean hasFace = false;
-            try {
-                // Try to create a face authentication prompt - if it succeeds, face auth is available
-                androidx.biometric.BiometricPrompt.PromptInfo promptInfo = new androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                    .setTitle("Test")
-                    .setNegativeButtonText("Cancel")
-                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                    .build();
-                hasFace = true;
-            } catch (Exception e) {
-                System.out.println("Error creating face authentication prompt: " + e.getMessage());
-            }
-
-            // Determine the type based on available features
-            if (hasFinger && (hasFace || hasIris)) {
-                return MULTIPLE;
-            } else if (hasFinger) {
-                return FINGERPRINT;
-            } else if (hasFace) {
-                return FACE_AUTHENTICATION;
-            } else if (hasIris) {
-                return IRIS_AUTHENTICATION;
-            }
-        }
-
-        return NONE;
-    }
-
     @PluginMethod
     public void isAvailable(PluginCall call) {
         JSObject ret = new JSObject();
@@ -125,29 +84,64 @@ public class NativeBiometric extends Plugin {
         boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));
 
         BiometricManager biometricManager = BiometricManager.from(getContext());
-        int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
-        if (useFallback) {
-            authenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
-        }
-        int canAuthenticateResult = biometricManager.canAuthenticate(authenticators);
-        // Using deviceHasCredentials instead of canAuthenticate(DEVICE_CREDENTIAL)
-        // > "Developers that wish to check for the presence of a PIN, pattern, or password on these versions should instead use isDeviceSecure."
-        // @see https://developer.android.com/reference/androidx/biometric/BiometricManager#canAuthenticate(int)
+
+        // Check for strong biometrics first
+        int strongAuthenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
+        int strongResult = biometricManager.canAuthenticate(strongAuthenticators);
+        boolean hasStrongBiometric = (strongResult == BiometricManager.BIOMETRIC_SUCCESS);
+
+        // Check for weak biometrics
+        int weakAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK;
+        int weakResult = biometricManager.canAuthenticate(weakAuthenticators);
+        boolean hasWeakBiometric = (weakResult == BiometricManager.BIOMETRIC_SUCCESS);
+
+        // Check if device has credentials (PIN/pattern/password)
         boolean fallbackAvailable = useFallback && this.deviceHasCredentials();
-        if (useFallback && !fallbackAvailable) {
-            canAuthenticateResult = BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE;
+
+        // Determine authentication strength
+        int authenticationStrength = AUTH_STRENGTH_NONE;
+        boolean isAvailable = false;
+
+        if (hasStrongBiometric) {
+            // Strong biometric available (fingerprints on devices that consider them strong)
+            authenticationStrength = AUTH_STRENGTH_STRONG;
+            isAvailable = true;
+        } else if (hasWeakBiometric) {
+            // Only weak biometric available (face on devices that consider it weak)
+            authenticationStrength = AUTH_STRENGTH_WEAK;
+            isAvailable = true;
+        } else if (fallbackAvailable) {
+            // No biometrics but fallback (PIN/pattern/password) is available
+            // PIN/pattern/password is ALWAYS considered WEAK, never STRONG
+            authenticationStrength = AUTH_STRENGTH_WEAK;
+            isAvailable = true;
         }
 
-        boolean isAvailable = (canAuthenticateResult == BiometricManager.BIOMETRIC_SUCCESS || fallbackAvailable);
-        ret.put("isAvailable", isAvailable);
-
+        // Handle error codes when authentication is not available
         if (!isAvailable) {
-            // BiometricManager Error Constants use the same values as BiometricPrompt's Constants. So we can reuse our
-            int pluginErrorCode = AuthActivity.convertToPluginErrorCode(canAuthenticateResult);
+            int biometricManagerErrorCode;
+
+            // Prefer the error from strong biometric check if it failed
+            if (strongResult != BiometricManager.BIOMETRIC_SUCCESS) {
+                biometricManagerErrorCode = strongResult;
+            } else if (weakResult != BiometricManager.BIOMETRIC_SUCCESS) {
+                // Otherwise use error from weak biometric check if it failed
+                biometricManagerErrorCode = weakResult;
+            } else {
+                // No biometrics available at all
+                // BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE indicates that biometric hardware is unavailable
+                // or cannot be accessed. This constant value may vary across Android versions, so we explicitly
+                // use the constant rather than assuming its numeric value.
+                biometricManagerErrorCode = BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE;
+            }
+
+            // Convert BiometricManager error codes to plugin error codes
+            int pluginErrorCode = convertBiometricManagerErrorToPluginError(biometricManagerErrorCode);
             ret.put("errorCode", pluginErrorCode);
         }
 
-        ret.put("biometryType", getAvailableFeature());
+        ret.put("isAvailable", isAvailable);
+        ret.put("authenticationStrength", authenticationStrength);
         call.resolve(ret);
     }
 
@@ -461,6 +455,25 @@ public class NativeBiometric extends Plugin {
         KeyguardManager keyguardManager = (KeyguardManager) getActivity().getSystemService(Context.KEYGUARD_SERVICE);
         // Can only use fallback if the device has a pin/pattern/password lockscreen.
         return keyguardManager.isDeviceSecure();
+    }
+
+    /**
+     * Convert BiometricManager error codes to plugin error codes
+     * BiometricManager constants have different values than BiometricPrompt constants
+     */
+    private int convertBiometricManagerErrorToPluginError(int errorCode) {
+        switch (errorCode) {
+            case BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE:
+            case BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE:
+            case BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED:
+                return 1; // BIOMETRICS_UNAVAILABLE
+            case BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED:
+                return 3; // BIOMETRICS_NOT_ENROLLED
+            case BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED:
+                return 1; // BIOMETRICS_UNAVAILABLE (security update required, treat as unavailable)
+            default:
+                return 0; // UNKNOWN_ERROR
+        }
     }
 
     @PluginMethod
