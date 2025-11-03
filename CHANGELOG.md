@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.5.0](https://github.com/Cap-go/capacitor-native-biometric/compare/7.4.4...7.5.0) (2025-11-03)
+
+
+### Features
+
+* isAvailable return stength instead of specific factors ([6b227e4](https://github.com/Cap-go/capacitor-native-biometric/commit/6b227e43d611964a7e97b326dd52976ddf39fdf2))
+
 ## [7.4.4](https://github.com/Cap-go/capacitor-native-biometric/compare/7.4.3...7.4.4) (2025-10-30)
 
 ## [7.4.3](https://github.com/Cap-go/capacitor-native-biometric/compare/7.4.2...7.4.3) (2025-10-30)
