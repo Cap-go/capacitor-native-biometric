@@ -20,14 +20,14 @@ The most complete doc is available here: https://capgo.app/docs/plugins/native-b
 ## Usage
 
 ```ts
-import { NativeBiometric, BiometryType } from "@capgo/capacitor-native-biometric";
+import { NativeBiometric, AuthenticationStrength } from "@capgo/capacitor-native-biometric";
 
 async performBiometricVerification(){
   const result = await NativeBiometric.isAvailable();
 
   if(!result.isAvailable) return;
 
-  const isFaceID = result.biometryType == BiometryType.FACE_ID;
+  const isStrongAuth = result.authenticationStrength == AuthenticationStrength.STRONG;
 
   const verified = await NativeBiometric.verifyIdentity({
     reason: "For easy log in",
