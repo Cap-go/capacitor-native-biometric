@@ -41,24 +41,35 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         var obj = JSObject()
 
         obj["isAvailable"] = false
-        obj["biometryType"] = 0
+        obj["authenticationStrength"] = 0 // NONE
 
         let useFallback = call.getBool("useFallback", false)
-        let policy = useFallback ? LAPolicy.deviceOwnerAuthentication : LAPolicy.deviceOwnerAuthenticationWithBiometrics
-
-        if context.canEvaluatePolicy(policy, error: &error) {
-            switch context.biometryType {
-            case .touchID:
-                obj["biometryType"] = 1
-            case .faceID:
-                obj["biometryType"] = 2
-            default:
-                obj["biomertryType"] = 0
-            }
-
+        
+        // Check biometric-only policy first
+        let biometricPolicy = LAPolicy.deviceOwnerAuthenticationWithBiometrics
+        let hasBiometric = context.canEvaluatePolicy(biometricPolicy, error: &error)
+        
+        // Check device credentials policy if fallback is enabled
+        var hasDeviceCredentials = false
+        if useFallback {
+            let devicePolicy = LAPolicy.deviceOwnerAuthentication
+            var deviceError: NSError?
+            hasDeviceCredentials = context.canEvaluatePolicy(devicePolicy, error: &deviceError)
+        }
+        
+        if hasBiometric {
+            // Biometric available - Face ID and Touch ID are both considered STRONG on iOS
+            obj["authenticationStrength"] = 1 // STRONG
+            obj["isAvailable"] = true
+            call.resolve(obj)
+        } else if hasDeviceCredentials {
+            // Only device credentials (PIN/password) available when useFallback is true
+            // PIN/password is ALWAYS considered WEAK, never STRONG
+            obj["authenticationStrength"] = 2 // WEAK
             obj["isAvailable"] = true
             call.resolve(obj)
         } else {
+            // No authentication available
             guard let authError = error else {
                 obj["errorCode"] = 0
                 call.resolve(obj)

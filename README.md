@@ -236,11 +236,13 @@ Get the native Capacitor plugin version.
 
 #### AvailableResult
 
-| Prop               | Type                                                  |
-| ------------------ | ----------------------------------------------------- |
-| **`isAvailable`**  | <code>boolean</code>                                  |
-| **`biometryType`** | <code><a href="#biometrytype">BiometryType</a></code> |
-| **`errorCode`**    | <code>number</code>                                   |
+Result from isAvailable() method indicating biometric authentication availability.
+
+| Prop                         | Type                                                                      | Description                                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`isAvailable`**            | <code>boolean</code>                                                      | Whether authentication is available (biometric or fallback if useFallback is true)                                                                                          |
+| **`authenticationStrength`** | <code><a href="#authenticationstrength">AuthenticationStrength</a></code> | The strength of available authentication method (STRONG, WEAK, or NONE)                                                                                                     |
+| **`errorCode`**              | <code><a href="#biometricautherror">BiometricAuthError</a></code>         | Error code from <a href="#biometricautherror">BiometricAuthError</a> enum. Only present when isAvailable is false. Indicates why biometric authentication is not available. |
 
 
 #### IsAvailableOptions
@@ -311,6 +313,34 @@ Get the native Capacitor plugin version.
 
 
 ### Enums
+
+
+#### AuthenticationStrength
+
+| Members      | Value          | Description                                                                                                                                                                                      |
+| ------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`NONE`**   | <code>0</code> | No authentication available, even if PIN is available but useFallback = false                                                                                                                    |
+| **`STRONG`** | <code>1</code> | Strong authentication: Face ID on iOS, fingerprints on devices that consider fingerprints strong (Android). Note: PIN/pattern/password is NEVER considered STRONG, even when useFallback = true. |
+| **`WEAK`**   | <code>2</code> | Weak authentication: Face authentication on Android devices that consider face weak, or PIN/pattern/password if useFallback = true (PIN is always WEAK, never STRONG).                           |
+
+
+#### BiometricAuthError
+
+| Members                       | Value           | Description                                                                           |
+| ----------------------------- | --------------- | ------------------------------------------------------------------------------------- |
+| **`UNKNOWN_ERROR`**           | <code>0</code>  | Unknown error occurred                                                                |
+| **`BIOMETRICS_UNAVAILABLE`**  | <code>1</code>  | Biometrics are unavailable (no hardware or hardware error) Platform: Android, iOS     |
+| **`USER_LOCKOUT`**            | <code>2</code>  | User has been locked out due to too many failed attempts Platform: Android, iOS       |
+| **`BIOMETRICS_NOT_ENROLLED`** | <code>3</code>  | No biometrics are enrolled on the device Platform: Android, iOS                       |
+| **`USER_TEMPORARY_LOCKOUT`**  | <code>4</code>  | User is temporarily locked out (Android: 30 second lockout) Platform: Android         |
+| **`AUTHENTICATION_FAILED`**   | <code>10</code> | Authentication failed (user did not authenticate successfully) Platform: Android, iOS |
+| **`APP_CANCEL`**              | <code>11</code> | App canceled the authentication (iOS only) Platform: iOS                              |
+| **`INVALID_CONTEXT`**         | <code>12</code> | Invalid context (iOS only) Platform: iOS                                              |
+| **`NOT_INTERACTIVE`**         | <code>13</code> | Authentication was not interactive (iOS only) Platform: iOS                           |
+| **`PASSCODE_NOT_SET`**        | <code>14</code> | Passcode/PIN is not set on the device Platform: Android, iOS                          |
+| **`SYSTEM_CANCEL`**           | <code>15</code> | System canceled the authentication (e.g., due to screen lock) Platform: Android, iOS  |
+| **`USER_CANCEL`**             | <code>16</code> | User canceled the authentication Platform: Android, iOS                               |
+| **`USER_FALLBACK`**           | <code>17</code> | User chose to use fallback authentication method Platform: Android, iOS               |
 
 
 #### BiometryType
