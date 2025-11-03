@@ -77,62 +77,6 @@ public class NativeBiometric extends Plugin {
 
     private SharedPreferences encryptedSharedPreferences;
 
-    private int getAvailableFeature(boolean useFallback) {
-        // default to none
-        BiometricManager biometricManager = BiometricManager.from(getContext());
-
-        // Check for biometric capabilities
-        int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
-        int canAuthenticate = biometricManager.canAuthenticate(authenticators);
-
-        // If fallback is enabled and strong biometrics not available, check weak biometrics (for devices like Samsung)
-        if (useFallback && canAuthenticate != BiometricManager.BIOMETRIC_SUCCESS) {
-            canAuthenticate = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK);
-        }
-
-        if (canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS) {
-            // Check specific features
-            PackageManager pm = getContext().getPackageManager();
-            boolean hasFinger = pm.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT);
-            boolean hasIris = false;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                hasIris = pm.hasSystemFeature(PackageManager.FEATURE_IRIS);
-            }
-
-            // For face, check if it's available
-            boolean hasFace = false;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Use system feature to check for face authentication
-                hasFace = pm.hasSystemFeature(PackageManager.FEATURE_FACE);
-            }
-
-            // If fallback is enabled, also check for weak face authentication (like Samsung)
-            if (useFallback && !hasFace) {
-                try {
-                    int faceWeakTest = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK);
-                    if (faceWeakTest == BiometricManager.BIOMETRIC_SUCCESS) {
-                        hasFace = true;
-                    }
-                } catch (Exception e) {
-                    System.out.println("Error checking face authentication: " + e.getMessage());
-                }
-            }
-
-            // Determine the type based on available features
-            if (hasFinger && (hasFace || hasIris)) {
-                return MULTIPLE;
-            } else if (hasFinger) {
-                return FINGERPRINT;
-            } else if (hasFace) {
-                return FACE_AUTHENTICATION;
-            } else if (hasIris) {
-                return IRIS_AUTHENTICATION;
-            }
-        }
-
-        return NONE;
-    }
-
     @PluginMethod
     public void isAvailable(PluginCall call) {
         JSObject ret = new JSObject();
