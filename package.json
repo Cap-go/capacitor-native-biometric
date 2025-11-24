@@ -16,7 +16,7 @@
     "CapgoCapacitorNativeBiometric.podspec"
   ],
   "author": "Martin Donadieu <martin@capgo.app>",
-  "license": "MIT",
+  "license": "MPL-2.0",
   "keywords": [
     "capacitor",
     "plugin",
