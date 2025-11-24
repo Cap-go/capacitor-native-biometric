@@ -9,7 +9,7 @@ import LocalAuthentication
 
 @objc(NativeBiometricPlugin)
 public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
-    private let pluginVersion: String = "7.5.2"
+    private let pluginVersion: String = "7.5.3"
     public let identifier = "NativeBiometricPlugin"
     public let jsName = "NativeBiometric"
     public let pluginMethods: [CAPPluginMethod] = [
