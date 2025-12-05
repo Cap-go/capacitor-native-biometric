@@ -19,7 +19,10 @@ let package = Package(
                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
                 .product(name: "Cordova", package: "capacitor-swift-pm")
             ],
-            path: "ios/Sources/NativeBiometricPlugin"),
+            path: "ios/Sources/NativeBiometricPlugin",
+            linkerSettings: [
+                .linkedFramework("LocalAuthentication")
+            ]),
         .testTarget(
             name: "NativeBiometricPluginTests",
             dependencies: ["NativeBiometricPlugin"],
