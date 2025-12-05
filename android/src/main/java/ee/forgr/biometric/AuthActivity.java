@@ -23,7 +23,9 @@ public class AuthActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_auth_acitivy);
 
-        maxAttempts = getIntent().getIntExtra("maxAttempts", 1);
+        // Get maxAttempts with validation: must be between 1 and 5, default to 1
+        int rawMaxAttempts = getIntent().getIntExtra("maxAttempts", 1);
+        maxAttempts = Math.max(1, Math.min(5, rawMaxAttempts));
 
         Executor executor;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

@@ -51,7 +51,7 @@ import org.json.JSONException;
 @CapacitorPlugin(name = "NativeBiometric")
 public class NativeBiometric extends Plugin {
 
-    private final String pluginVersion = "7.3.2";
+    private final String pluginVersion = "7.5.4";
 
     //protected final static int AUTH_CODE = 0102;
 
@@ -77,11 +77,20 @@ public class NativeBiometric extends Plugin {
 
     private SharedPreferences encryptedSharedPreferences;
 
-    @PluginMethod
-    public void isAvailable(PluginCall call) {
-        JSObject ret = new JSObject();
+    @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+        // Notify listeners when app resumes from background
+        JSObject result = checkBiometryAvailability(false);
+        notifyListeners("biometryChange", result);
+    }
 
-        boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));
+    /**
+     * Check biometry availability and return result as JSObject.
+     * This is a helper method used by both isAvailable() and handleOnResume().
+     */
+    private JSObject checkBiometryAvailability(boolean useFallback) {
+        JSObject ret = new JSObject();
 
         BiometricManager biometricManager = BiometricManager.from(getContext());
 
@@ -96,23 +105,30 @@ public class NativeBiometric extends Plugin {
         boolean hasWeakBiometric = (weakResult == BiometricManager.BIOMETRIC_SUCCESS);
 
         // Check if device has credentials (PIN/pattern/password)
-        boolean fallbackAvailable = useFallback && this.deviceHasCredentials();
+        boolean deviceIsSecure = this.deviceHasCredentials();
+        boolean fallbackAvailable = useFallback && deviceIsSecure;
+
+        // Determine biometry type
+        int biometryType = detectBiometryType(biometricManager);
+        ret.put("biometryType", biometryType);
+
+        // Device is secure if it has PIN/pattern/password
+        ret.put("deviceIsSecure", deviceIsSecure);
+
+        // Strong biometry is available only if strong biometric check passes
+        ret.put("strongBiometryIsAvailable", hasStrongBiometric);
 
         // Determine authentication strength
         int authenticationStrength = AUTH_STRENGTH_NONE;
         boolean isAvailable = false;
 
         if (hasStrongBiometric) {
-            // Strong biometric available (fingerprints on devices that consider them strong)
             authenticationStrength = AUTH_STRENGTH_STRONG;
             isAvailable = true;
         } else if (hasWeakBiometric) {
-            // Only weak biometric available (face on devices that consider it weak)
             authenticationStrength = AUTH_STRENGTH_WEAK;
             isAvailable = true;
         } else if (fallbackAvailable) {
-            // No biometrics but fallback (PIN/pattern/password) is available
-            // PIN/pattern/password is ALWAYS considered WEAK, never STRONG
             authenticationStrength = AUTH_STRENGTH_WEAK;
             isAvailable = true;
         }
@@ -120,29 +136,58 @@ public class NativeBiometric extends Plugin {
         // Handle error codes when authentication is not available
         if (!isAvailable) {
             int biometricManagerErrorCode;
-
-            // Prefer the error from strong biometric check if it failed
             if (strongResult != BiometricManager.BIOMETRIC_SUCCESS) {
                 biometricManagerErrorCode = strongResult;
             } else if (weakResult != BiometricManager.BIOMETRIC_SUCCESS) {
-                // Otherwise use error from weak biometric check if it failed
                 biometricManagerErrorCode = weakResult;
             } else {
-                // No biometrics available at all
-                // BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE indicates that biometric hardware is unavailable
-                // or cannot be accessed. This constant value may vary across Android versions, so we explicitly
-                // use the constant rather than assuming its numeric value.
                 biometricManagerErrorCode = BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE;
             }
-
-            // Convert BiometricManager error codes to plugin error codes
             int pluginErrorCode = convertBiometricManagerErrorToPluginError(biometricManagerErrorCode);
             ret.put("errorCode", pluginErrorCode);
         }
 
         ret.put("isAvailable", isAvailable);
         ret.put("authenticationStrength", authenticationStrength);
-        call.resolve(ret);
+        return ret;
+    }
+
+    @PluginMethod
+    public void isAvailable(PluginCall call) {
+        boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));
+        JSObject result = checkBiometryAvailability(useFallback);
+        call.resolve(result);
+    }
+
+    /**
+     * Detect the primary biometry type available on the device.
+     * Note: Android doesn't provide a direct API to query specific biometry types,
+     * so we check for hardware features. This is informational only - always use
+     * isAvailable for logic decisions as hardware presence doesn't guarantee availability.
+     */
+    private int detectBiometryType(BiometricManager biometricManager) {
+        PackageManager pm = getContext().getPackageManager();
+
+        boolean hasFingerprint = pm.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT);
+        boolean hasFace = pm.hasSystemFeature(PackageManager.FEATURE_FACE);
+        boolean hasIris = pm.hasSystemFeature(PackageManager.FEATURE_IRIS);
+
+        int typeCount = 0;
+        if (hasFingerprint) typeCount++;
+        if (hasFace) typeCount++;
+        if (hasIris) typeCount++;
+
+        if (typeCount > 1) {
+            return MULTIPLE; // Multiple biometry types available
+        } else if (hasFingerprint) {
+            return FINGERPRINT;
+        } else if (hasFace) {
+            return FACE_AUTHENTICATION;
+        } else if (hasIris) {
+            return IRIS_AUTHENTICATION;
+        }
+
+        return NONE;
     }
 
     @PluginMethod

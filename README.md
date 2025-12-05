@@ -18,6 +18,7 @@ A **free**, **comprehensive** biometric authentication plugin with secure creden
 - **Flexible fallback** - Optional passcode fallback when biometrics unavailable
 - **Customizable UI** - Full control over prompts, titles, descriptions, button text
 - **Detailed error codes** - Unified error handling across iOS and Android
+- **Resume listener** - Detect biometry availability changes when app returns from background
 - **Modern package management** - Supports both Swift Package Manager (SPM) and CocoaPods (SPM-ready for Capacitor 8)
 
 Perfect for banking apps, password managers, authentication flows, and any app requiring secure user verification.
@@ -40,7 +41,15 @@ async performBiometricVerification(){
 
   if(!result.isAvailable) return;
 
+  // Check the biometry type for display purposes
+  // IMPORTANT: Always use isAvailable for logic decisions, not biometryType
   const isFaceID = result.biometryType == BiometryType.FACE_ID;
+
+  // Check if device has PIN/pattern/password set
+  console.log('Device is secure:', result.deviceIsSecure);
+
+  // Check if strong biometry (Face ID, Touch ID, fingerprint) is available
+  console.log('Strong biometry available:', result.strongBiometryIsAvailable);
 
   const verified = await NativeBiometric.verifyIdentity({
     reason: "For easy log in",
@@ -69,6 +78,15 @@ NativeBiometric.setCredentials({
 NativeBiometric.deleteCredentials({
   server: "www.example.com",
 }).then();
+
+// Listen for biometry availability changes when app resumes from background
+const handle = await NativeBiometric.addListener('biometryChange', (result) => {
+  console.log('Biometry availability changed:', result.isAvailable);
+  console.log('Biometry type:', result.biometryType);
+});
+
+// To remove the listener when no longer needed:
+// await handle.remove();
 ```
 
 ### Biometric Auth Errors
@@ -94,6 +112,7 @@ This is a plugin specific list of error codes that can be thrown on verifyIdenti
 <docgen-index>
 
 * [`isAvailable(...)`](#isavailable)
+* [`addListener('biometryChange', ...)`](#addlistenerbiometrychange-)
 * [`verifyIdentity(...)`](#verifyidentity)
 * [`getCredentials(...)`](#getcredentials)
 * [`setCredentials(...)`](#setcredentials)
@@ -101,6 +120,7 @@ This is a plugin specific list of error codes that can be thrown on verifyIdenti
 * [`isCredentialsSaved(...)`](#iscredentialssaved)
 * [`getPluginVersion()`](#getpluginversion)
 * [Interfaces](#interfaces)
+* [Type Aliases](#type-aliases)
 * [Enums](#enums)
 
 </docgen-index>
@@ -123,6 +143,28 @@ Checks if biometric authentication hardware is available.
 **Returns:** <code>Promise&lt;<a href="#availableresult">AvailableResult</a>&gt;</code>
 
 **Since:** 1.0.0
+
+--------------------
+
+
+### addListener('biometryChange', ...)
+
+```typescript
+addListener(eventName: 'biometryChange', listener: BiometryChangeListener) => Promise<PluginListenerHandle>
+```
+
+Adds a listener that is called when the app resumes from background.
+This is useful to detect if biometry availability has changed while
+the app was in the background (e.g., user enrolled/unenrolled biometrics).
+
+| Param           | Type                                                                      | Description                                                                                  |
+| --------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **`eventName`** | <code>'biometryChange'</code>                                             | - Must be 'biometryChange'                                                                   |
+| **`listener`**  | <code><a href="#biometrychangelistener">BiometryChangeListener</a></code> | - Callback function that receives the updated <a href="#availableresult">AvailableResult</a> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 7.6.0
 
 --------------------
 
@@ -238,11 +280,14 @@ Get the native Capacitor plugin version.
 
 Result from isAvailable() method indicating biometric authentication availability.
 
-| Prop                         | Type                                                                      | Description                                                                                                                                                                 |
-| ---------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`isAvailable`**            | <code>boolean</code>                                                      | Whether authentication is available (biometric or fallback if useFallback is true)                                                                                          |
-| **`authenticationStrength`** | <code><a href="#authenticationstrength">AuthenticationStrength</a></code> | The strength of available authentication method (STRONG, WEAK, or NONE)                                                                                                     |
-| **`errorCode`**              | <code><a href="#biometricautherror">BiometricAuthError</a></code>         | Error code from <a href="#biometricautherror">BiometricAuthError</a> enum. Only present when isAvailable is false. Indicates why biometric authentication is not available. |
+| Prop                            | Type                                                                      | Description                                                                                                                                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`isAvailable`**               | <code>boolean</code>                                                      | Whether authentication is available (biometric or fallback if useFallback is true)                                                                                                                          |
+| **`authenticationStrength`**    | <code><a href="#authenticationstrength">AuthenticationStrength</a></code> | The strength of available authentication method (STRONG, WEAK, or NONE)                                                                                                                                     |
+| **`biometryType`**              | <code><a href="#biometrytype">BiometryType</a></code>                     | The primary biometry type available on the device. On Android devices with multiple biometry types, this returns MULTIPLE. Use this for display purposes only - always use isAvailable for logic decisions. |
+| **`deviceIsSecure`**            | <code>boolean</code>                                                      | Whether the device has a secure lock screen (PIN, pattern, or password). This is independent of biometric enrollment.                                                                                       |
+| **`strongBiometryIsAvailable`** | <code>boolean</code>                                                      | Whether strong biometry (Face ID, Touch ID, or fingerprint on devices that consider it strong) is specifically available, separate from weak biometry or device credentials.                                |
+| **`errorCode`**                 | <code><a href="#biometricautherror">BiometricAuthError</a></code>         | Error code from <a href="#biometricautherror">BiometricAuthError</a> enum. Only present when isAvailable is false. Indicates why biometric authentication is not available.                                 |
 
 
 #### IsAvailableOptions
@@ -250,6 +295,13 @@ Result from isAvailable() method indicating biometric authentication availabilit
 | Prop              | Type                 | Description                                                                                           |
 | ----------------- | -------------------- | ----------------------------------------------------------------------------------------------------- |
 | **`useFallback`** | <code>boolean</code> | Specifies if should fallback to passcode authentication if biometric authentication is not available. |
+
+
+#### PluginListenerHandle
+
+| Prop         | Type                                      |
+| ------------ | ----------------------------------------- |
+| **`remove`** | <code>() =&gt; Promise&lt;void&gt;</code> |
 
 
 #### BiometricOptions
@@ -312,6 +364,16 @@ Result from isAvailable() method indicating biometric authentication availabilit
 | **`server`** | <code>string</code> |
 
 
+### Type Aliases
+
+
+#### BiometryChangeListener
+
+Callback type for biometry change listener
+
+<code>(result: <a href="#availableresult">AvailableResult</a>): void</code>
+
+
 ### Enums
 
 
@@ -322,6 +384,19 @@ Result from isAvailable() method indicating biometric authentication availabilit
 | **`NONE`**   | <code>0</code> | No authentication available, even if PIN is available but useFallback = false                                                                                                                    |
 | **`STRONG`** | <code>1</code> | Strong authentication: Face ID on iOS, fingerprints on devices that consider fingerprints strong (Android). Note: PIN/pattern/password is NEVER considered STRONG, even when useFallback = true. |
 | **`WEAK`**   | <code>2</code> | Weak authentication: Face authentication on Android devices that consider face weak, or PIN/pattern/password if useFallback = true (PIN is always WEAK, never STRONG).                           |
+
+
+#### BiometryType
+
+| Members                   | Value          |
+| ------------------------- | -------------- |
+| **`NONE`**                | <code>0</code> |
+| **`TOUCH_ID`**            | <code>1</code> |
+| **`FACE_ID`**             | <code>2</code> |
+| **`FINGERPRINT`**         | <code>3</code> |
+| **`FACE_AUTHENTICATION`** | <code>4</code> |
+| **`IRIS_AUTHENTICATION`** | <code>5</code> |
+| **`MULTIPLE`**            | <code>6</code> |
 
 
 #### BiometricAuthError
@@ -342,19 +417,6 @@ Result from isAvailable() method indicating biometric authentication availabilit
 | **`USER_CANCEL`**             | <code>16</code> | User canceled the authentication Platform: Android, iOS                               |
 | **`USER_FALLBACK`**           | <code>17</code> | User chose to use fallback authentication method Platform: Android, iOS               |
 
-
-#### BiometryType
-
-| Members                   | Value          |
-| ------------------------- | -------------- |
-| **`NONE`**                | <code>0</code> |
-| **`TOUCH_ID`**            | <code>1</code> |
-| **`FACE_ID`**             | <code>2</code> |
-| **`FINGERPRINT`**         | <code>3</code> |
-| **`FACE_AUTHENTICATION`** | <code>4</code> |
-| **`IRIS_AUTHENTICATION`** | <code>5</code> |
-| **`MULTIPLE`**            | <code>6</code> |
-
 </docgen-api>
 ## Face ID (iOS)
 
@@ -374,6 +436,22 @@ To use android's BiometricPrompt api you must add the following permission to yo
 ```xml
 <uses-permission android:name="android.permission.USE_BIOMETRIC">
 ```
+
+### Important Note About biometryType on Android
+
+The `biometryType` field indicates what biometric hardware is present, but **hardware presence does not guarantee availability**. Some Android devices report face authentication hardware but don't make it available to apps.
+
+**Always use `isAvailable` for logic decisions**, not `biometryType`. The `biometryType` field should only be used for display purposes (e.g., showing "Use Face ID" vs "Use Fingerprint" in your UI).
+
+## Web Platform
+
+This plugin does not support web browsers. On web:
+- `isAvailable()` returns `{ isAvailable: false, ... }` (no error thrown)
+- `addListener()` returns a no-op handle
+- `verifyIdentity()` throws an error
+- Credential methods throw errors
+
+This allows you to safely check availability on web without try/catch, but authentication features are only available on iOS and Android.
 
 ## Contributors
 

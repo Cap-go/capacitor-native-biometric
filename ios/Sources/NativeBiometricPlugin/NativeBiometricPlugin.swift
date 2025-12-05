@@ -21,6 +21,88 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "isCredentialsSaved", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
     ]
+
+    override public func load() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func handleAppDidBecomeActive() {
+        // Notify listeners when app becomes active (resumes from background)
+        let result = checkBiometryAvailability(useFallback: false)
+        notifyListeners("biometryChange", data: result)
+    }
+
+    private func checkBiometryAvailability(useFallback: Bool) -> JSObject {
+        let context = LAContext()
+        var error: NSError?
+        var obj = JSObject()
+
+        obj["isAvailable"] = false
+        obj["authenticationStrength"] = 0 // NONE
+        obj["biometryType"] = 0 // NONE
+        obj["deviceIsSecure"] = false
+        obj["strongBiometryIsAvailable"] = false
+
+        // Check biometric-only policy first
+        let biometricPolicy = LAPolicy.deviceOwnerAuthenticationWithBiometrics
+        let hasBiometric = context.canEvaluatePolicy(biometricPolicy, error: &error)
+
+        // Determine biometry type
+        let biometryType: Int
+        switch context.biometryType {
+        case .touchID:
+            biometryType = 1 // TOUCH_ID
+        case .faceID:
+            biometryType = 2 // FACE_ID
+        case .opticID:
+            biometryType = 2 // Treat opticID as FACE_ID for compatibility
+        default:
+            biometryType = 0 // NONE
+        }
+        obj["biometryType"] = biometryType
+
+        // Check if device has passcode set (device is secure)
+        let devicePolicy = LAPolicy.deviceOwnerAuthentication
+        var deviceError: NSError?
+        let deviceIsSecure = context.canEvaluatePolicy(devicePolicy, error: &deviceError)
+        obj["deviceIsSecure"] = deviceIsSecure
+
+        // Check device credentials policy if fallback is enabled
+        var hasDeviceCredentials = false
+        if useFallback {
+            hasDeviceCredentials = deviceIsSecure
+        }
+
+        // Strong biometry is available if biometric authentication works
+        // On iOS, both Face ID and Touch ID are considered STRONG
+        obj["strongBiometryIsAvailable"] = hasBiometric
+
+        if hasBiometric {
+            obj["authenticationStrength"] = 1 // STRONG
+            obj["isAvailable"] = true
+        } else if hasDeviceCredentials {
+            obj["authenticationStrength"] = 2 // WEAK
+            obj["isAvailable"] = true
+        } else {
+            if let authError = error {
+                let pluginErrorCode = convertToPluginErrorCode(authError.code)
+                obj["errorCode"] = pluginErrorCode
+            } else {
+                obj["errorCode"] = 0
+            }
+        }
+
+        return obj
+    }
     struct Credentials {
         var username: String
         var password: String
@@ -36,50 +118,9 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
     typealias JSObject = [String: Any]
 
     @objc func isAvailable(_ call: CAPPluginCall) {
-        let context = LAContext()
-        var error: NSError?
-        var obj = JSObject()
-
-        obj["isAvailable"] = false
-        obj["authenticationStrength"] = 0 // NONE
-
         let useFallback = call.getBool("useFallback", false)
-        
-        // Check biometric-only policy first
-        let biometricPolicy = LAPolicy.deviceOwnerAuthenticationWithBiometrics
-        let hasBiometric = context.canEvaluatePolicy(biometricPolicy, error: &error)
-        
-        // Check device credentials policy if fallback is enabled
-        var hasDeviceCredentials = false
-        if useFallback {
-            let devicePolicy = LAPolicy.deviceOwnerAuthentication
-            var deviceError: NSError?
-            hasDeviceCredentials = context.canEvaluatePolicy(devicePolicy, error: &deviceError)
-        }
-        
-        if hasBiometric {
-            // Biometric available - Face ID and Touch ID are both considered STRONG on iOS
-            obj["authenticationStrength"] = 1 // STRONG
-            obj["isAvailable"] = true
-            call.resolve(obj)
-        } else if hasDeviceCredentials {
-            // Only device credentials (PIN/password) available when useFallback is true
-            // PIN/password is ALWAYS considered WEAK, never STRONG
-            obj["authenticationStrength"] = 2 // WEAK
-            obj["isAvailable"] = true
-            call.resolve(obj)
-        } else {
-            // No authentication available
-            guard let authError = error else {
-                obj["errorCode"] = 0
-                call.resolve(obj)
-                return
-            }
-            var pluginErrorCode = convertToPluginErrorCode(authError.code)
-            obj["errorCode"] = pluginErrorCode
-            call.resolve(obj)
-        }
-
+        let result = checkBiometryAvailability(useFallback: useFallback)
+        call.resolve(result)
     }
 
     @objc func verifyIdentity(_ call: CAPPluginCall) {

@@ -1,3 +1,5 @@
+import type { PluginListenerHandle } from '@capacitor/core';
+
 export enum BiometryType {
   // Android, iOS
   NONE = 0,
@@ -56,6 +58,22 @@ export interface AvailableResult {
    * The strength of available authentication method (STRONG, WEAK, or NONE)
    */
   authenticationStrength: AuthenticationStrength;
+  /**
+   * The primary biometry type available on the device.
+   * On Android devices with multiple biometry types, this returns MULTIPLE.
+   * Use this for display purposes only - always use isAvailable for logic decisions.
+   */
+  biometryType: BiometryType;
+  /**
+   * Whether the device has a secure lock screen (PIN, pattern, or password).
+   * This is independent of biometric enrollment.
+   */
+  deviceIsSecure: boolean;
+  /**
+   * Whether strong biometry (Face ID, Touch ID, or fingerprint on devices that consider it strong)
+   * is specifically available, separate from weak biometry or device credentials.
+   */
+  strongBiometryIsAvailable: boolean;
   /**
    * Error code from BiometricAuthError enum. Only present when isAvailable is false.
    * Indicates why biometric authentication is not available.
@@ -191,6 +209,11 @@ export enum BiometricAuthError {
   USER_FALLBACK = 17,
 }
 
+/**
+ * Callback type for biometry change listener
+ */
+export type BiometryChangeListener = (result: AvailableResult) => void;
+
 export interface NativeBiometricPlugin {
   /**
    * Checks if biometric authentication hardware is available.
@@ -200,6 +223,28 @@ export interface NativeBiometricPlugin {
    * @since 1.0.0
    */
   isAvailable(options?: IsAvailableOptions): Promise<AvailableResult>;
+
+  /**
+   * Adds a listener that is called when the app resumes from background.
+   * This is useful to detect if biometry availability has changed while
+   * the app was in the background (e.g., user enrolled/unenrolled biometrics).
+   *
+   * @param eventName - Must be 'biometryChange'
+   * @param {BiometryChangeListener} listener - Callback function that receives the updated AvailableResult
+   * @returns {Promise<PluginListenerHandle>} Handle to remove the listener
+   * @since 7.6.0
+   *
+   * @example
+   * ```typescript
+   * const handle = await NativeBiometric.addListener('biometryChange', (result) => {
+   *   console.log('Biometry availability changed:', result.isAvailable);
+   * });
+   *
+   * // To remove the listener:
+   * await handle.remove();
+   * ```
+   */
+  addListener(eventName: 'biometryChange', listener: BiometryChangeListener): Promise<PluginListenerHandle>;
   /**
    * Prompts the user to authenticate with biometrics.
    * @param {BiometricOptions} [options]
