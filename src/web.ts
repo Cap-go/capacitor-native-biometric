@@ -31,6 +31,7 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
     });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async addListener(_eventName: 'biometryChange', _listener: BiometryChangeListener): Promise<PluginListenerHandle> {
     // Web platform: no-op, but return a valid handle
     return {

@@ -337,8 +337,10 @@ public class NativeBiometric extends Plugin {
         String KEY_ALIAS = call.getString("server", null);
 
         if (KEY_ALIAS != null) {
-            SharedPreferences sharedPreferences = getContext()
-                .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE);
+            SharedPreferences sharedPreferences = getContext().getSharedPreferences(
+                NATIVE_BIOMETRIC_SHARED_PREFERENCES,
+                Context.MODE_PRIVATE
+            );
             String username = sharedPreferences.getString(KEY_ALIAS + "-username", null);
             String password = sharedPreferences.getString(KEY_ALIAS + "-password", null);
 

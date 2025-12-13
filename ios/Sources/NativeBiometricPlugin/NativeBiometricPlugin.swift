@@ -2,6 +2,8 @@ import Foundation
 import Capacitor
 import LocalAuthentication
 
+// swiftlint:disable type_body_length cyclomatic_complexity
+
 /**
  * Please read the Capacitor iOS Plugin Development Guide
  * here: https://capacitor.ionicframework.com/docs/plugins/ios
@@ -242,10 +244,14 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
 
     // Store user Credentials in Keychain
     func storeCredentialsInKeychain(_ credentials: Credentials, _ server: String) throws {
+        guard let passwordData = credentials.password.data(using: .utf8) else {
+            throw KeychainError.unexpectedPasswordData
+        }
+
         let query: [String: Any] = [kSecClass as String: kSecClassInternetPassword,
                                     kSecAttrAccount as String: credentials.username,
                                     kSecAttrServer as String: server,
-                                    kSecValueData as String: credentials.password.data(using: .utf8)!]
+                                    kSecValueData as String: passwordData]
 
         let status = SecItemAdd(query as CFDictionary, nil)
 
@@ -259,7 +265,9 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
                                     kSecAttrServer as String: server]
 
         let account = credentials.username
-        let password = credentials.password.data(using: String.Encoding.utf8)!
+        guard let password = credentials.password.data(using: String.Encoding.utf8) else {
+            throw KeychainError.unexpectedPasswordData
+        }
         let attributes: [String: Any] = [kSecAttrAccount as String: account,
                                          kSecValueData as String: password]
 
@@ -352,3 +360,5 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve(["version": self.pluginVersion])
     }
 }
+
+// swiftlint:enable type_body_length cyclomatic_complexity
