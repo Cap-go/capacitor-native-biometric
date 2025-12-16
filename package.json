@@ -32,6 +32,7 @@
   "bugs": {
     "url": "https://github.com/Cap-go/capacitor-native-biometric/issues"
   },
+  "homepage": "https://capgo.app/docs/plugins/native-biometric/",
   "scripts": {
     "verify": "npm run verify:ios && npm run verify:android && npm run verify:web",
     "verify:ios": "xcodebuild -scheme CapgoCapacitorNativeBiometric -destination generic/platform=iOS",
