@@ -89,6 +89,210 @@ const handle = await NativeBiometric.addListener('biometryChange', (result) => {
 // await handle.remove();
 ```
 
+## Advanced Usage Examples
+
+### Displaying Appropriate Icons and Text
+
+Use the `biometryType` field to show the right UI elements to your users:
+
+```typescript
+import { NativeBiometric, BiometryType } from "@capgo/capacitor-native-biometric";
+
+async function setupBiometricUI() {
+  const result = await NativeBiometric.isAvailable();
+
+  // Get appropriate icon and text based on biometry type
+  let icon = '🔒';
+  let buttonText = 'Authenticate';
+
+  switch (result.biometryType) {
+    case BiometryType.FACE_ID:
+      icon = '👤';
+      buttonText = 'Login with Face ID';
+      break;
+    case BiometryType.TOUCH_ID:
+      icon = '👆';
+      buttonText = 'Login with Touch ID';
+      break;
+    case BiometryType.FINGERPRINT:
+      icon = '👆';
+      buttonText = 'Login with Fingerprint';
+      break;
+    case BiometryType.FACE_AUTHENTICATION:
+      icon = '👤';
+      buttonText = 'Login with Face Recognition';
+      break;
+    case BiometryType.IRIS_AUTHENTICATION:
+      icon = '👁️';
+      buttonText = 'Login with Iris Scanner';
+      break;
+    case BiometryType.MULTIPLE:
+      icon = '🔐';
+      buttonText = 'Login with Biometrics';
+      break;
+    default:
+      icon = '🔐';
+      buttonText = 'Login';
+  }
+
+  // Update your UI with the icon and button text
+  updateUIElements(icon, buttonText);
+}
+```
+
+### Complete Authentication Flow
+
+```typescript
+import { 
+  NativeBiometric, 
+  BiometryType, 
+  AuthenticationStrength 
+} from "@capgo/capacitor-native-biometric";
+
+async function performAuthentication() {
+  try {
+    // Step 1: Check availability with fallback enabled
+    const availability = await NativeBiometric.isAvailable({
+      useFallback: true
+    });
+
+    console.log('Biometry Info:', {
+      isAvailable: availability.isAvailable,
+      biometryType: availability.biometryType,
+      authenticationStrength: availability.authenticationStrength,
+      deviceIsSecure: availability.deviceIsSecure,
+      strongBiometryIsAvailable: availability.strongBiometryIsAvailable
+    });
+
+    // Step 2: Check if authentication is available
+    if (!availability.isAvailable) {
+      console.error('Authentication not available:', availability.errorCode);
+      return false;
+    }
+
+    // Step 3: Customize prompt based on biometry type
+    let promptMessage = 'Authenticate to continue';
+    if (availability.biometryType === BiometryType.FACE_ID) {
+      promptMessage = 'Look at your device to authenticate';
+    } else if (availability.biometryType === BiometryType.TOUCH_ID || 
+               availability.biometryType === BiometryType.FINGERPRINT) {
+      promptMessage = 'Place your finger on the sensor';
+    }
+
+    // Step 4: Perform authentication
+    await NativeBiometric.verifyIdentity({
+      reason: promptMessage,
+      title: 'Authentication Required',
+      subtitle: 'Verify your identity to continue',
+      description: 'This ensures your account security'
+    });
+
+    console.log('✅ Authentication successful!');
+    return true;
+
+  } catch (error) {
+    console.error('❌ Authentication failed:', error);
+    return false;
+  }
+}
+```
+
+### React/Vue Component Example
+
+Here's how to integrate biometric authentication in a modern framework:
+
+```typescript
+import { useEffect, useState } from 'react';
+import { NativeBiometric, BiometryType, AvailableResult } from "@capgo/capacitor-native-biometric";
+
+function BiometricButton() {
+  const [biometry, setBiometry] = useState<AvailableResult | null>(null);
+
+  useEffect(() => {
+    checkBiometry();
+    
+    // Listen for changes when app resumes
+    const handle = NativeBiometric.addListener('biometryChange', (result) => {
+      setBiometry(result);
+    });
+
+    return () => {
+      handle.then(h => h.remove());
+    };
+  }, []);
+
+  async function checkBiometry() {
+    const result = await NativeBiometric.isAvailable({ useFallback: true });
+    setBiometry(result);
+  }
+
+  async function handleLogin() {
+    if (!biometry?.isAvailable) return;
+
+    try {
+      await NativeBiometric.verifyIdentity({
+        reason: 'Authenticate to access your account'
+      });
+      // Handle successful authentication
+      console.log('User authenticated');
+    } catch (error) {
+      console.error('Authentication failed:', error);
+    }
+  }
+
+  const getButtonContent = () => {
+    if (!biometry?.isAvailable) {
+      return { icon: '🔒', text: 'Login Unavailable' };
+    }
+
+    switch (biometry.biometryType) {
+      case BiometryType.FACE_ID:
+        return { icon: '👤', text: 'Login with Face ID' };
+      case BiometryType.TOUCH_ID:
+      case BiometryType.FINGERPRINT:
+        return { icon: '👆', text: 'Login with Biometrics' };
+      default:
+        return { icon: '🔐', text: 'Login' };
+    }
+  };
+
+  const { icon, text } = getButtonContent();
+
+  return (
+    <button 
+      onClick={handleLogin} 
+      disabled={!biometry?.isAvailable}
+      className="biometric-button"
+    >
+      <span className="icon">{icon}</span>
+      <span className="text">{text}</span>
+    </button>
+  );
+}
+```
+
+### Understanding BiometryType Values
+
+The `BiometryType` enum indicates what biometric hardware is present:
+
+| Value | Constant | Platform | Description |
+|-------|----------|----------|-------------|
+| 0 | `NONE` | All | No biometry available |
+| 1 | `TOUCH_ID` | iOS | Touch ID fingerprint sensor |
+| 2 | `FACE_ID` | iOS | Face ID or Optic ID |
+| 3 | `FINGERPRINT` | Android | Fingerprint sensor |
+| 4 | `FACE_AUTHENTICATION` | Android | Face recognition |
+| 5 | `IRIS_AUTHENTICATION` | Android | Iris scanner |
+| 6 | `MULTIPLE` | Android | Multiple biometry types available |
+
+> **⚠️ Important:** Use `biometryType` for **display purposes only**. Always check `isAvailable` for logic decisions, as hardware presence doesn't guarantee the user has enrolled that biometry type.
+
+### Additional Resources
+
+For more detailed examples and advanced use cases, see:
+- [Complete Usage Examples](./example-biometry-type-usage.md) - Comprehensive guide with multiple code examples
+- [Implementation Verification](./BIOMETRY_TYPE_VERIFICATION.md) - Technical details about the BiometryType implementation
+
 ### Biometric Auth Errors
 
 This is a plugin specific list of error codes that can be thrown on verifyIdentity failure, or set as a part of isAvailable. It consolidates Android and iOS specific Authentication Error codes into one combined error list.
