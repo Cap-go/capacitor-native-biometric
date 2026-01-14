@@ -227,12 +227,8 @@ public class NativeBiometric extends Plugin {
             intent.putExtra("allowedBiometryTypes", types);
         }
 
-        boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));
-        if (useFallback) {
-            useFallback = this.deviceHasCredentials();
-        }
-
-        intent.putExtra("useFallback", useFallback);
+        // Note: useFallback parameter is ignored on Android (iOS-only feature)
+        // It is gracefully ignored to prevent crashes
 
         startActivityForResult(call, intent, "verifyResult");
     }

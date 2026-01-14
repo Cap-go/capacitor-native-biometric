@@ -41,7 +41,9 @@ export interface Credentials {
 
 export interface IsAvailableOptions {
   /**
+   * Only for iOS.
    * Specifies if should fallback to passcode authentication if biometric authentication is not available.
+   * On Android, this parameter is ignored.
    */
   useFallback: boolean;
 }
@@ -89,7 +91,9 @@ export interface BiometricOptions {
   description?: string;
   negativeButtonText?: string;
   /**
+   * Only for iOS.
    * Specifies if should fallback to passcode authentication if biometric authentication fails.
+   * On Android, this parameter is ignored.
    */
   useFallback?: boolean;
   /**

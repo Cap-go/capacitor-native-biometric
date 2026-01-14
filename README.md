@@ -292,9 +292,9 @@ Result from isAvailable() method indicating biometric authentication availabilit
 
 #### IsAvailableOptions
 
-| Prop              | Type                 | Description                                                                                           |
-| ----------------- | -------------------- | ----------------------------------------------------------------------------------------------------- |
-| **`useFallback`** | <code>boolean</code> | Specifies if should fallback to passcode authentication if biometric authentication is not available. |
+| Prop              | Type                 | Description                                                                                                                                                |
+| ----------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`useFallback`** | <code>boolean</code> | Only for iOS. Specifies if should fallback to passcode authentication if biometric authentication is not available. On Android, this parameter is ignored. |
 
 
 #### PluginListenerHandle
@@ -313,7 +313,7 @@ Result from isAvailable() method indicating biometric authentication availabilit
 | **`subtitle`**             | <code>string</code>         |                                                                                                                                                            |                |
 | **`description`**          | <code>string</code>         |                                                                                                                                                            |                |
 | **`negativeButtonText`**   | <code>string</code>         |                                                                                                                                                            |                |
-| **`useFallback`**          | <code>boolean</code>        | Specifies if should fallback to passcode authentication if biometric authentication fails.                                                                 |                |
+| **`useFallback`**          | <code>boolean</code>        | Only for iOS. Specifies if should fallback to passcode authentication if biometric authentication fails. On Android, this parameter is ignored.            |                |
 | **`fallbackTitle`**        | <code>string</code>         | Only for iOS. Set the text for the fallback button in the authentication dialog. If this property is not specified, the default text is set by the system. |                |
 | **`maxAttempts`**          | <code>number</code>         | Only for Android. Set a maximum number of attempts for biometric authentication. The maximum allowed by android is 5.                                      | <code>1</code> |
 | **`allowedBiometryTypes`** | <code>BiometryType[]</code> | Only for Android. Specify which biometry types are allowed for authentication. If not specified, all available types will be allowed.                      |                |

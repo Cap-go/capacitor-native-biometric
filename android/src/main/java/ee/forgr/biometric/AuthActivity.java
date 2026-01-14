@@ -44,23 +44,18 @@ public class AuthActivity extends AppCompatActivity {
             .setSubtitle(getIntent().hasExtra("subtitle") ? getIntent().getStringExtra("subtitle") : null)
             .setDescription(getIntent().hasExtra("description") ? getIntent().getStringExtra("description") : null);
 
-        boolean useFallback = getIntent().getBooleanExtra("useFallback", false);
+        // Note: useFallback parameter is ignored on Android (iOS-only feature)
         int[] allowedTypes = getIntent().getIntArrayExtra("allowedBiometryTypes");
 
         int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
-        if (useFallback) {
-            authenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
-        }
         if (allowedTypes != null) {
             // Filter authenticators based on allowed types
             authenticators = getAllowedAuthenticators(allowedTypes);
         }
         builder.setAllowedAuthenticators(authenticators);
 
-        if (!useFallback) {
-            String negativeText = getIntent().getStringExtra("negativeButtonText");
-            builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
-        }
+        String negativeText = getIntent().getStringExtra("negativeButtonText");
+        builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
 
         BiometricPrompt.PromptInfo promptInfo = builder.build();
 
