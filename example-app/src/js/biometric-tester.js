@@ -144,8 +144,27 @@ function createBiometricTester() {
 
       <button class="button" id="set-credentials">Set Credentials</button>
       <button class="button" id="get-credentials">Get Credentials</button>
+      <button class="button" id="check-credentials-saved">Check If Credentials Saved</button>
       <button class="button" id="delete-credentials">Delete Credentials</button>
       <div id="credentials-result"></div>
+    </div>
+
+    <div class="section">
+      <h2>Login Flow Demo (Issue Use Case)</h2>
+      <div class="info">
+        This section demonstrates the exact use case from the issue:<br>
+        After login, check if credentials are already saved to decide whether to show the "save credentials" popup.
+      </div>
+      <div class="form-group">
+        <label for="login-username">Login Username:</label>
+        <input type="text" id="login-username" value="user@example.com" placeholder="Enter username">
+      </div>
+      <div class="form-group">
+        <label for="login-password">Login Password:</label>
+        <input type="password" id="login-password" value="mypassword123" placeholder="Enter password">
+      </div>
+      <button class="button" id="simulate-login">Simulate Login Flow</button>
+      <div id="login-flow-result"></div>
     </div>
 
     <div class="section">
@@ -157,7 +176,8 @@ function createBiometricTester() {
       </div>
       <div class="info">
         <strong>Quick Debug Commands:</strong><br>
-        • Test the exact user issue: <code>NativeBiometric.setCredentials({username: 'test@example.com', password: 'password123', server: 'example.com'})</code><br>
+        • Set credentials: <code>NativeBiometric.setCredentials({username: 'test@example.com', password: 'password123', server: 'example.com'})</code><br>
+        • Check if saved: <code>NativeBiometric.isCredentialsSaved({server: 'example.com'})</code><br>
         • Check availability: <code>NativeBiometric.isAvailable()</code><br>
         • Get credentials: <code>NativeBiometric.getCredentials({server: 'example.com'})</code>
       </div>
@@ -178,7 +198,12 @@ function createBiometricTester() {
     verifyIdentityFallback: container.querySelector('#verify-identity-fallback'),
     setCredentials: container.querySelector('#set-credentials'),
     getCredentials: container.querySelector('#get-credentials'),
+    checkCredentialsSaved: container.querySelector('#check-credentials-saved'),
     deleteCredentials: container.querySelector('#delete-credentials'),
+    simulateLogin: container.querySelector('#simulate-login'),
+    loginUsername: container.querySelector('#login-username'),
+    loginPassword: container.querySelector('#login-password'),
+    loginFlowResult: container.querySelector('#login-flow-result'),
     executeDebug: container.querySelector('#execute-debug'),
     debugInput: container.querySelector('#debug-input'),
     biometricStatus: container.querySelector('#biometric-status'),
@@ -228,7 +253,9 @@ function createBiometricTester() {
   elements.verifyIdentityFallback.addEventListener('click', () => verifyIdentity(true));
   elements.setCredentials.addEventListener('click', setCredentials);
   elements.getCredentials.addEventListener('click', getCredentials);
+  elements.checkCredentialsSaved.addEventListener('click', checkCredentialsSaved);
   elements.deleteCredentials.addEventListener('click', deleteCredentials);
+  elements.simulateLogin.addEventListener('click', simulateLoginFlow);
   elements.executeDebug.addEventListener('click', executeDebug);
 
   // Functions
@@ -340,6 +367,137 @@ function createBiometricTester() {
       addConsoleLog('ERROR', ['Delete credentials failed:', error]);
       showResult(elements.credentialsResult, `❌ Delete failed: ${error.message || error}`, 'error');
     }
+  }
+
+  async function checkCredentialsSaved() {
+    const server = elements.server.value;
+
+    if (!server) {
+      showResult(elements.credentialsResult, '❌ Please enter server', 'error');
+      return;
+    }
+
+    try {
+      addConsoleLog('INFO', [`Checking if credentials are saved for server: ${server}`]);
+      const result = await NativeBiometric.isCredentialsSaved({
+        server: server,
+      });
+      addConsoleLog('SUCCESS', ['✅ Check completed:', result]);
+      
+      if (result.isSaved) {
+        showResult(elements.credentialsResult, 
+          `✅ Credentials ARE saved for server: ${server}`, 
+          'success');
+      } else {
+        showResult(elements.credentialsResult, 
+          `ℹ️ No credentials saved for server: ${server}`, 
+          'info');
+      }
+    } catch (error) {
+      addConsoleLog('ERROR', ['Check credentials failed:', error]);
+      showResult(elements.credentialsResult, `❌ Check failed: ${error.message || error}`, 'error');
+    }
+  }
+
+  async function simulateLoginFlow() {
+    const username = elements.loginUsername.value;
+    const password = elements.loginPassword.value;
+    const server = 'auth.example.com'; // Using a fixed server for this demo
+
+    if (!username || !password) {
+      showResult(elements.loginFlowResult, '❌ Please fill in username and password', 'error');
+      return;
+    }
+
+    try {
+      // Step 1: Simulate successful login
+      addConsoleLog('INFO', ['📝 Step 1: Simulating login...']);
+      showResult(elements.loginFlowResult, '📝 Step 1: Simulating login...', 'info');
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      addConsoleLog('SUCCESS', ['✅ Login successful!']);
+
+      // Step 2: Check if biometrics are available
+      addConsoleLog('INFO', ['🔍 Step 2: Checking biometric availability...']);
+      const result = await NativeBiometric.isAvailable({ useFallback: true });
+      
+      if (!result.isAvailable) {
+        addConsoleLog('INFO', ['ℹ️ Biometrics not available, going to home page directly']);
+        showResult(elements.loginFlowResult, 
+          '✅ Login successful! Biometrics not available, redirecting to home page...', 
+          'success');
+        return;
+      }
+
+      addConsoleLog('SUCCESS', ['✅ Biometrics available!']);
+
+      // Step 3: Check if credentials are already saved (THE KEY FEATURE FROM THE ISSUE)
+      addConsoleLog('INFO', ['🔍 Step 3: Checking if credentials are already saved...']);
+      const checkCredentials = await NativeBiometric.isCredentialsSaved({ server });
+
+      if (checkCredentials.isSaved) {
+        // Credentials already saved - go to home page directly
+        addConsoleLog('SUCCESS', ['✅ Credentials already saved! Going to home page...']);
+        showResult(elements.loginFlowResult, 
+          `✅ Login successful!<br>
+          ℹ️ Credentials already saved for ${server}<br>
+          🏠 Redirecting to home page (no popup shown)...`, 
+          'success');
+      } else {
+        // No credentials saved - show save credentials popup
+        addConsoleLog('INFO', ['ℹ️ No credentials saved yet']);
+        showResult(elements.loginFlowResult, 
+          `✅ Login successful!<br>
+          ℹ️ No credentials saved for ${server}<br>
+          💾 SHOWING SAVE CREDENTIALS POPUP (in real app, this would be a modal)<br>
+          <br>
+          <strong>Would you like to save credentials?</strong><br>
+          <button class="button" id="save-creds-yes">Yes, Save</button>
+          <button class="button" id="save-creds-no">No, Thanks</button>`, 
+          'info');
+
+        // Add event listeners for the popup buttons
+        setTimeout(() => {
+          const yesBtn = document.getElementById('save-creds-yes');
+          const noBtn = document.getElementById('save-creds-no');
+          
+          if (yesBtn) {
+            yesBtn.addEventListener('click', async () => {
+              try {
+                await NativeBiometric.setCredentials({
+                  username: username,
+                  password: password,
+                  server: server,
+                });
+                addConsoleLog('SUCCESS', ['✅ Credentials saved!']);
+                showResult(elements.loginFlowResult, 
+                  '✅ Credentials saved successfully! Redirecting to home page...', 
+                  'success');
+              } catch (error) {
+                addConsoleLog('ERROR', ['❌ Failed to save credentials:', error]);
+                showResult(elements.loginFlowResult, 
+                  `❌ Failed to save credentials: ${error.message || error}`, 
+                  'error');
+              }
+            });
+          }
+          
+          if (noBtn) {
+            noBtn.addEventListener('click', () => {
+              addConsoleLog('INFO', ['User declined to save credentials']);
+              showResult(elements.loginFlowResult, 
+                'ℹ️ Credentials not saved. Redirecting to home page...', 
+                'info');
+            });
+          }
+        }, 100);
+      }
+    } catch (error) {
+      addConsoleLog('ERROR', ['Login flow failed:', error]);
+      showResult(elements.loginFlowResult, `❌ Login flow error: ${error.message || error}`, 'error');
+    }
+  }
   }
 
   async function executeDebug() {
