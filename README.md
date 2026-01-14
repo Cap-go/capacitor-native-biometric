@@ -605,13 +605,13 @@ The `biometryType` field indicates what biometric hardware is present, but **har
 
 ## Web Platform
 
-This plugin does not support web browsers. On web:
-- `isAvailable()` returns `{ isAvailable: false, ... }` (no error thrown)
+This plugin provides a dummy implementation for in-browser development and testing. On web:
+- `isAvailable()` returns `{ isAvailable: true, ... }` simulating biometric availability
 - `addListener()` returns a no-op handle
-- `verifyIdentity()` throws an error
-- Credential methods throw errors
+- `verifyIdentity()` always succeeds (no actual authentication)
+- Credential methods use in-memory storage (credentials stored in a Map, cleared on page refresh)
 
-This allows you to safely check availability on web without try/catch, but authentication features are only available on iOS and Android.
+This allows you to develop and test your app in the browser without errors. Note that real biometric authentication is only available on iOS and Android platforms.
 
 ## Contributors
 
