@@ -321,8 +321,6 @@ verifyIdentity(options?: BiometricOptions | undefined) => Promise<void>
 
 Prompts the user to authenticate with biometrics.
 
-⚠️ **Security Warning**: This method can be bypassed on rooted/jailbroken devices using tools like Frida. Do not use as the sole authentication mechanism for sensitive operations. See the [Security Considerations](#️-security-considerations) section for secure usage patterns and recommended practices.
-
 | Param         | Type                                                          |
 | ------------- | ------------------------------------------------------------- |
 | **`options`** | <code><a href="#biometricoptions">BiometricOptions</a></code> |
