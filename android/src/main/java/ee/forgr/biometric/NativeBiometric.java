@@ -34,6 +34,7 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.ProviderException;
 import java.security.SecureRandom;
 import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
@@ -376,7 +377,20 @@ public class NativeBiometric extends Plugin {
         try {
             key = generateKey(KEY_ALIAS, true);
         } catch (StrongBoxUnavailableException e) {
+            // Retry without StrongBox if it's unavailable
             key = generateKey(KEY_ALIAS, false);
+        } catch (java.security.ProviderException e) {
+            // ProviderException can be thrown for various device-specific keystore issues
+            // Retry without StrongBox as a fallback
+            try {
+                key = generateKey(KEY_ALIAS, false);
+            } catch (StrongBoxUnavailableException ex) {
+                // This shouldn't happen when isStrongBoxBacked=false, but handle it anyway
+                throw new GeneralSecurityException("Failed to generate key without StrongBox", ex);
+            } catch (java.security.ProviderException ex) {
+                // If it still fails without StrongBox, wrap and rethrow
+                throw new GeneralSecurityException("Keystore key generation failed", ex);
+            }
         }
         return key;
     }
