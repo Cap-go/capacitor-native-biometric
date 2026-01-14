@@ -13,7 +13,7 @@ Use biometrics confirm device owner presence or authenticate users. A couple of 
 
 A **free**, **comprehensive** biometric authentication plugin with secure credential storage:
 
-- **All biometric types** - Face ID, Touch ID, Fingerprint, Face Authentication, Iris
+- **All biometric types** - Face ID, Touch ID, Fingerprint, Face Authentication, Iris, and Device Credentials (PIN, pattern, password)
 - **Secure credential storage** - Keychain (iOS) and Keystore (Android) integration
 - **Flexible fallback** - Optional passcode fallback when biometrics unavailable
 - **Customizable UI** - Full control over prompts, titles, descriptions, button text
@@ -543,6 +543,7 @@ Callback type for biometry change listener
 | **`FACE_AUTHENTICATION`** | <code>4</code> |
 | **`IRIS_AUTHENTICATION`** | <code>5</code> |
 | **`MULTIPLE`**            | <code>6</code> |
+| **`DEVICE_CREDENTIAL`**   | <code>7</code> |
 
 
 #### BiometricAuthError
