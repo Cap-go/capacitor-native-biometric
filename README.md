@@ -39,15 +39,15 @@ The `verifyIdentity()` method **should not be used as the sole authentication me
 
 ### Recommended Security Practices
 
-1. **Use Root/Jailbreak Detection**: Protect your app by detecting compromised devices. We recommend using the **[@capgo/capacitor-root-checker](https://github.com/Cap-go/capacitor-root-checker)** plugin to detect rooted/jailbroken devices:
+1. **Use Root/Jailbreak Detection**: Protect your app by detecting compromised devices. We recommend using the **[@capgo/capacitor-is-root](https://github.com/Cap-go/capacitor-is-root)** plugin to detect rooted/jailbroken devices:
 
 ```typescript
-import { RootChecker } from '@capgo/capacitor-root-checker';
+import { IsRoot } from '@capgo/capacitor-is-root';
 
 async function checkDeviceSecurity() {
-  const { isRooted } = await RootChecker.isRooted();
+  const { result } = await IsRoot.isRooted();
   
-  if (isRooted) {
+  if (result) {
     // Handle rooted device - show warning, restrict features, or block access
     console.warn('Device security compromised');
     return false;
@@ -70,12 +70,12 @@ async function checkDeviceSecurity() {
 
 ```typescript
 import { NativeBiometric } from "@capgo/capacitor-native-biometric";
-import { RootChecker } from '@capgo/capacitor-root-checker';
+import { IsRoot } from '@capgo/capacitor-is-root';
 
 async function secureAuthentication() {
   // 1. Check device security first
-  const { isRooted } = await RootChecker.isRooted();
-  if (isRooted) {
+  const { result } = await IsRoot.isRooted();
+  if (result) {
     // Handle rooted device appropriately
     // Example: showSecurityWarning() could display an alert to the user
     showSecurityWarning();
@@ -117,7 +117,7 @@ This plugin provides:
 This plugin does NOT provide:
 - ❌ Protection against determined attackers on compromised devices
 - ❌ Server-side authentication or validation
-- ❌ Root/jailbreak detection (use [@capgo/capacitor-root-checker](https://github.com/Cap-go/capacitor-root-checker))
+- ❌ Root/jailbreak detection (use [@capgo/capacitor-is-root](https://github.com/Cap-go/capacitor-is-root))
 
 ## Installation (Only supports Capacitor 7)
 
