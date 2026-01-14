@@ -49,24 +49,25 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   verifyIdentity(_options?: BiometricOptions): Promise<void> {
-    console.log('verifyIdentity (dummy implementation)', _options);
+    console.log('verifyIdentity (dummy implementation)');
     // Dummy implementation: always succeeds for browser testing
     return Promise.resolve();
   }
 
   getCredentials(_options: GetCredentialOptions): Promise<Credentials> {
-    console.log('getCredentials (dummy implementation)', _options);
+    console.log('getCredentials (dummy implementation)', { server: _options.server });
     // Dummy implementation: retrieve from in-memory store
     const credentials = this.credentialStore.get(_options.server);
     if (!credentials) {
-      throw new Error('[Dummy implementation] No credentials found for the specified server');
+      throw new Error('No credentials found for the specified server');
     }
     return Promise.resolve(credentials);
   }
 
   setCredentials(_options: SetCredentialOptions): Promise<void> {
-    console.log('setCredentials (dummy implementation)', _options);
+    console.log('setCredentials (dummy implementation)', { server: _options.server });
     // Dummy implementation: store in memory
     this.credentialStore.set(_options.server, {
       username: _options.username,
@@ -76,14 +77,14 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
   }
 
   deleteCredentials(_options: DeleteCredentialOptions): Promise<void> {
-    console.log('deleteCredentials (dummy implementation)', _options);
+    console.log('deleteCredentials (dummy implementation)', { server: _options.server });
     // Dummy implementation: remove from in-memory store
     this.credentialStore.delete(_options.server);
     return Promise.resolve();
   }
 
   isCredentialsSaved(_options: IsCredentialsSavedOptions): Promise<IsCredentialsSavedResult> {
-    console.log('isCredentialsSaved (dummy implementation)', _options);
+    console.log('isCredentialsSaved (dummy implementation)', { server: _options.server });
     // Dummy implementation: check in-memory store
     return Promise.resolve({ isSaved: this.credentialStore.has(_options.server) });
   }
