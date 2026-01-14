@@ -51,6 +51,20 @@ async performBiometricVerification(){
   // Check if strong biometry (Face ID, Touch ID, fingerprint) is available
   console.log('Strong biometry available:', result.strongBiometryIsAvailable);
 
+  // NEW in 8.1.0: Check which biometric hardware types are supported
+  // This helps you determine if users can enroll additional biometric types
+  if (result.biometryTypes) {
+    const hasFingerprint = result.biometryTypes.includes(BiometryType.FINGERPRINT);
+    const hasFaceAuth = result.biometryTypes.includes(BiometryType.FACE_AUTHENTICATION);
+    
+    // On Android: If device has face hardware but biometrics aren't enrolled,
+    // you can prompt user to enroll face authentication
+    if (hasFaceAuth && !result.isAvailable) {
+      console.log('Face authentication supported but not enrolled');
+      // Prompt user to enroll in device settings
+    }
+  }
+
   const verified = await NativeBiometric.verifyIdentity({
     reason: "For easy log in",
     title: "Log in",
