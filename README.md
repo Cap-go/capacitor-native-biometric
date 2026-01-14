@@ -27,11 +27,102 @@ Perfect for banking apps, password managers, authentication flows, and any app r
 
 The most complete doc is available here: https://capgo.app/docs/plugins/native-biometric/
 
+## ⚠️ Security Considerations
+
+### Important: verifyIdentity() Can Be Bypassed on Rooted/Jailbroken Devices
+
+The `verifyIdentity()` method **should not be used as the sole authentication mechanism** for sensitive operations. On rooted Android devices or jailbroken iOS devices, attackers can use tools like Frida, Xposed, or similar frameworks to:
+
+- Hook the JavaScript bridge and force `verifyIdentity()` to return success
+- Intercept native method calls and bypass biometric authentication
+- Modify the app's runtime behavior to skip authentication checks
+
+### Recommended Security Practices
+
+1. **Use Root/Jailbreak Detection**: Protect your app by detecting compromised devices. We recommend using the **[@capgo/capacitor-root-checker](https://github.com/Cap-go/capacitor-root-checker)** plugin to detect rooted/jailbroken devices:
+
+```typescript
+import { RootChecker } from '@capgo/capacitor-root-checker';
+
+async function checkDeviceSecurity() {
+  const { isRooted } = await RootChecker.isRooted();
+  
+  if (isRooted) {
+    // Handle rooted device - show warning, restrict features, or block access
+    console.warn('Device security compromised');
+    return false;
+  }
+  return true;
+}
+```
+
+2. **Never Store Sensitive Data Client-Side**: Don't rely on locally stored credentials for critical authentication. Use `verifyIdentity()` as a convenience feature, not a security boundary.
+
+3. **Server-Side Verification**: Always validate authentication on your backend server. Biometric authentication should be used for user convenience, with the real authentication happening server-side.
+
+4. **Implement Additional Security Layers**:
+   - Use certificate pinning for API calls
+   - Implement server-side session management
+   - Use short-lived tokens that expire after biometric auth
+   - Add anti-tampering checks
+
+### Secure Usage Pattern
+
+```typescript
+import { NativeBiometric } from "@capgo/capacitor-native-biometric";
+import { RootChecker } from '@capgo/capacitor-root-checker';
+
+async function secureAuthentication() {
+  // 1. Check device security first
+  const { isRooted } = await RootChecker.isRooted();
+  if (isRooted) {
+    // Handle rooted device appropriately
+    showSecurityWarning();
+    // Optionally: disable biometric login, require re-authentication, etc.
+  }
+
+  // 2. Perform biometric authentication
+  try {
+    await NativeBiometric.verifyIdentity({
+      reason: "Authenticate to access your account",
+      title: "Biometric Login",
+    });
+  } catch (error) {
+    console.error("Biometric authentication failed");
+    return false;
+  }
+
+  // 3. Get stored credentials (if needed for convenience)
+  const credentials = await NativeBiometric.getCredentials({
+    server: "www.example.com",
+  });
+
+  // 4. CRITICAL: Validate credentials with your backend server
+  const isValid = await validateWithServer(credentials.username, credentials.password);
+  
+  return isValid;
+}
+```
+
+### What This Plugin Provides
+
+This plugin provides:
+- ✅ Convenient local biometric authentication UI
+- ✅ Secure credential storage using Keychain (iOS) and Keystore (Android)
+- ✅ Protection against casual unauthorized access
+
+This plugin does NOT provide:
+- ❌ Protection against determined attackers on compromised devices
+- ❌ Server-side authentication or validation
+- ❌ Root/jailbreak detection (use [@capgo/capacitor-root-checker](https://github.com/Cap-go/capacitor-root-checker))
+
 ## Installation (Only supports Capacitor 7)
 
 - `npm i @capgo/capacitor-native-biometric`
 
 ## Usage
+
+⚠️ **Important**: Before implementing biometric authentication, review the [Security Considerations](#️-security-considerations) section to understand limitations and best practices for secure implementation.
 
 ```ts
 import { NativeBiometric, BiometryType } from "@capgo/capacitor-native-biometric";
@@ -65,6 +156,9 @@ async performBiometricVerification(){
   const credentials = await NativeBiometric.getCredentials({
     server: "www.example.com",
   });
+  
+  // IMPORTANT: Always validate credentials with your backend server
+  // Do not trust client-side verification alone
 }
 
 // Save user's credentials
@@ -176,6 +270,8 @@ verifyIdentity(options?: BiometricOptions | undefined) => Promise<void>
 ```
 
 Prompts the user to authenticate with biometrics.
+
+⚠️ **Security Warning**: This method can be bypassed on rooted/jailbroken devices using tools like Frida. Do not use as the sole authentication mechanism for sensitive operations. See the [Security Considerations](#️-security-considerations) section for secure usage patterns and recommended practices.
 
 | Param         | Type                                                          |
 | ------------- | ------------------------------------------------------------- |
