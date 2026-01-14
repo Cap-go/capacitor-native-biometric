@@ -15,6 +15,8 @@ export enum BiometryType {
   IRIS_AUTHENTICATION = 5,
   // Android
   MULTIPLE = 6,
+  // Android - Device credentials (PIN, pattern, or password)
+  DEVICE_CREDENTIAL = 7,
 }
 
 export enum AuthenticationStrength {

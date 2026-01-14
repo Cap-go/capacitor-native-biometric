@@ -13,7 +13,7 @@ Use biometrics confirm device owner presence or authenticate users. A couple of 
 
 A **free**, **comprehensive** biometric authentication plugin with secure credential storage:
 
-- **All biometric types** - Face ID, Touch ID, Fingerprint, Face Authentication, Iris
+- **All biometric types** - Face ID, Touch ID, Fingerprint, Face Authentication, Iris, and Device Credentials (PIN, pattern, password)
 - **Secure credential storage** - Keychain (iOS) and Keystore (Android) integration
 - **Flexible fallback** - Optional passcode fallback when biometrics unavailable
 - **Customizable UI** - Full control over prompts, titles, descriptions, button text
@@ -27,11 +27,105 @@ Perfect for banking apps, password managers, authentication flows, and any app r
 
 The most complete doc is available here: https://capgo.app/docs/plugins/native-biometric/
 
+## ⚠️ Security Considerations
+
+### Important: verifyIdentity() Can Be Bypassed on Rooted/Jailbroken Devices
+
+The `verifyIdentity()` method **should not be used as the sole authentication mechanism** for sensitive operations. On rooted Android devices or jailbroken iOS devices, attackers can use tools like Frida, Xposed, or similar frameworks to:
+
+- Hook the JavaScript bridge and force `verifyIdentity()` to return success
+- Intercept native method calls and bypass biometric authentication
+- Modify the app's runtime behavior to skip authentication checks
+
+### Recommended Security Practices
+
+1. **Use Root/Jailbreak Detection**: Protect your app by detecting compromised devices. We recommend using the **[@capgo/capacitor-is-root](https://github.com/Cap-go/capacitor-is-root)** plugin to detect rooted/jailbroken devices:
+
+```typescript
+import { IsRoot } from '@capgo/capacitor-is-root';
+
+async function checkDeviceSecurity() {
+  const { result } = await IsRoot.isRooted();
+  
+  if (result) {
+    // Handle rooted device - show warning, restrict features, or block access
+    console.warn('Device security compromised');
+    return false;
+  }
+  return true;
+}
+```
+
+2. **Never Store Sensitive Data Client-Side**: Don't rely on locally stored credentials for critical authentication. Use `verifyIdentity()` as a convenience feature, not a security boundary.
+
+3. **Server-Side Verification**: Always validate authentication on your backend server. Biometric authentication should be used for user convenience, with the real authentication happening server-side.
+
+4. **Implement Additional Security Layers**:
+   - Use certificate pinning for API calls
+   - Implement server-side session management
+   - Use short-lived tokens that expire after biometric auth
+   - Add anti-tampering checks
+
+### Secure Usage Pattern
+
+```typescript
+import { NativeBiometric } from "@capgo/capacitor-native-biometric";
+import { IsRoot } from '@capgo/capacitor-is-root';
+
+async function secureAuthentication() {
+  // 1. Check device security first
+  const { result } = await IsRoot.isRooted();
+  if (result) {
+    // Handle rooted device appropriately
+    // Example: showSecurityWarning() could display an alert to the user
+    showSecurityWarning();
+    // Optionally: disable biometric login, require re-authentication, etc.
+  }
+
+  // 2. Perform biometric authentication
+  try {
+    await NativeBiometric.verifyIdentity({
+      reason: "Authenticate to access your account",
+      title: "Biometric Login",
+    });
+  } catch (error) {
+    console.error("Biometric authentication failed");
+    return false;
+  }
+
+  // 3. Get stored credentials (if needed for convenience)
+  const credentials = await NativeBiometric.getCredentials({
+    server: "www.example.com",
+  });
+
+  // 4. CRITICAL: Validate credentials with your backend server
+  // Example: validateWithServer() should send credentials to your API
+  // and verify them server-side before granting access
+  const isValid = await validateWithServer(credentials.username, credentials.password);
+  
+  return isValid;
+}
+```
+
+### What This Plugin Provides
+
+This plugin provides:
+- ✅ Convenient local biometric authentication UI
+- ✅ Secure credential storage using Keychain (iOS) and Keystore (Android)
+- ✅ Protection against casual unauthorized access
+
+This plugin does NOT provide:
+- ❌ Protection against determined attackers on compromised devices
+- ❌ Server-side authentication or validation
+- ❌ Root/jailbreak detection (use [@capgo/capacitor-is-root](https://github.com/Cap-go/capacitor-is-root))
+
 ## Installation (Only supports Capacitor 7)
 
 - `npm i @capgo/capacitor-native-biometric`
 
 ## Usage
+
+⚠️ **Important**: Before implementing biometric authentication, review the [Security Considerations](#️-security-considerations) section to understand limitations and best practices for secure implementation.
 
 ```ts
 import { NativeBiometric, BiometryType } from "@capgo/capacitor-native-biometric";
@@ -79,6 +173,9 @@ async performBiometricVerification(){
   const credentials = await NativeBiometric.getCredentials({
     server: "www.example.com",
   });
+  
+  // IMPORTANT: Always validate credentials with your backend server
+  // Do not trust client-side verification alone
 }
 
 // Save user's credentials
@@ -87,6 +184,12 @@ NativeBiometric.setCredentials({
   password: "password",
   server: "www.example.com",
 }).then();
+
+// Check if credentials are already saved
+const isSaved = await NativeBiometric.isCredentialsSaved({
+  server: "www.example.com",
+});
+console.log('Credentials saved:', isSaved.isSaved);
 
 // Delete user's credentials
 NativeBiometric.deleteCredentials({
@@ -101,6 +204,47 @@ const handle = await NativeBiometric.addListener('biometryChange', (result) => {
 
 // To remove the listener when no longer needed:
 // await handle.remove();
+```
+
+### Complete Login Flow Example
+
+This example shows how to use `isCredentialsSaved()` to check if credentials are already saved before showing a "save credentials" popup:
+
+```ts
+// After successful login
+async handleLoginSuccess(username: string, password: string) {
+  // Check if biometric authentication is available
+  const result = await NativeBiometric.isAvailable({ useFallback: true });
+  
+  if (!result.isAvailable) {
+    // Biometrics not available - go to home page directly
+    this.navigateToHome();
+    return;
+  }
+  
+  // Check if credentials are already saved
+  const checkCredentials = await NativeBiometric.isCredentialsSaved({
+    server: "www.example.com"
+  });
+  
+  if (checkCredentials.isSaved) {
+    // Credentials already saved - go to home page
+    this.navigateToHome();
+  } else {
+    // No credentials saved - show save credentials popup
+    this.showSaveCredentialsPopup(username, password);
+  }
+}
+
+// Save credentials when user confirms
+async saveCredentials(username: string, password: string) {
+  await NativeBiometric.setCredentials({
+    username: username,
+    password: password,
+    server: "www.example.com",
+  });
+  this.navigateToHome();
+}
 ```
 
 ### Biometric Auth Errors
@@ -412,6 +556,7 @@ Callback type for biometry change listener
 | **`FACE_AUTHENTICATION`** | <code>4</code> |
 | **`IRIS_AUTHENTICATION`** | <code>5</code> |
 | **`MULTIPLE`**            | <code>6</code> |
+| **`DEVICE_CREDENTIAL`**   | <code>7</code> |
 
 
 #### BiometricAuthError
