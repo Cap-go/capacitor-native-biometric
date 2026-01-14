@@ -136,7 +136,8 @@ async function setupBiometricUI() {
   }
 
   // Update your UI with the icon and button text
-  updateUIElements(icon, buttonText);
+  // For example: document.getElementById('auth-button').textContent = buttonText;
+  return { icon, buttonText };
 }
 ```
 
@@ -212,12 +213,17 @@ function BiometricButton() {
     checkBiometry();
     
     // Listen for changes when app resumes
-    const handle = NativeBiometric.addListener('biometryChange', (result) => {
+    let listenerHandle: any;
+    NativeBiometric.addListener('biometryChange', (result) => {
       setBiometry(result);
+    }).then(handle => {
+      listenerHandle = handle;
     });
 
     return () => {
-      handle.then(h => h.remove());
+      if (listenerHandle) {
+        listenerHandle.remove();
+      }
     };
   }, []);
 
