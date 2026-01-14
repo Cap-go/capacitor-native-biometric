@@ -55,7 +55,7 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
     // Dummy implementation: retrieve from in-memory store
     const credentials = this.credentialStore.get(_options.server);
     if (!credentials) {
-      throw new Error(`No credentials found for server: ${_options.server}`);
+      throw new Error(`[Dummy implementation] No credentials found for server: ${_options.server}`);
     }
     return Promise.resolve(credentials);
   }
