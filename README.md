@@ -171,6 +171,12 @@ NativeBiometric.setCredentials({
   server: "www.example.com",
 }).then();
 
+// Check if credentials are already saved
+const isSaved = await NativeBiometric.isCredentialsSaved({
+  server: "www.example.com",
+});
+console.log('Credentials saved:', isSaved.isSaved);
+
 // Delete user's credentials
 NativeBiometric.deleteCredentials({
   server: "www.example.com",
@@ -184,6 +190,47 @@ const handle = await NativeBiometric.addListener('biometryChange', (result) => {
 
 // To remove the listener when no longer needed:
 // await handle.remove();
+```
+
+### Complete Login Flow Example
+
+This example shows how to use `isCredentialsSaved()` to check if credentials are already saved before showing a "save credentials" popup:
+
+```ts
+// After successful login
+async handleLoginSuccess(username: string, password: string) {
+  // Check if biometric authentication is available
+  const result = await NativeBiometric.isAvailable({ useFallback: true });
+  
+  if (!result.isAvailable) {
+    // Biometrics not available - go to home page directly
+    this.navigateToHome();
+    return;
+  }
+  
+  // Check if credentials are already saved
+  const checkCredentials = await NativeBiometric.isCredentialsSaved({
+    server: "www.example.com"
+  });
+  
+  if (checkCredentials.isSaved) {
+    // Credentials already saved - go to home page
+    this.navigateToHome();
+  } else {
+    // No credentials saved - show save credentials popup
+    this.showSaveCredentialsPopup(username, password);
+  }
+}
+
+// Save credentials when user confirms
+async saveCredentials(username: string, password: string) {
+  await NativeBiometric.setCredentials({
+    username: username,
+    password: password,
+    server: "www.example.com",
+  });
+  this.navigateToHome();
+}
 ```
 
 ### Biometric Auth Errors
