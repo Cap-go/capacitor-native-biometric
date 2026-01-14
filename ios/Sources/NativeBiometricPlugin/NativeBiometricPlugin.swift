@@ -60,17 +60,23 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
 
         // Determine biometry type
         let biometryType: Int
+        var biometryTypes: [Int] = []
         switch context.biometryType {
         case .touchID:
             biometryType = 1 // TOUCH_ID
+            biometryTypes = [1] // TOUCH_ID
         case .faceID:
             biometryType = 2 // FACE_ID
+            biometryTypes = [2] // FACE_ID
         case .opticID:
             biometryType = 2 // Treat opticID as FACE_ID for compatibility
+            biometryTypes = [2] // FACE_ID
         default:
             biometryType = 0 // NONE
+            biometryTypes = []
         }
         obj["biometryType"] = biometryType
+        obj["biometryTypes"] = biometryTypes
 
         // Check if device has passcode set (device is secure)
         let devicePolicy = LAPolicy.deviceOwnerAuthentication

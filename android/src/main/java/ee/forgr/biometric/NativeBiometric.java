@@ -71,6 +71,7 @@ public class NativeBiometric extends Plugin {
      * Helper class to hold biometry type information
      */
     private static class BiometryInfo {
+
         int primaryType;
         JSArray supportedTypes;
 
@@ -181,11 +182,11 @@ public class NativeBiometric extends Plugin {
      * Detect the primary biometry type and all supported types available on the device.
      * Returns information about hardware-supported biometric types and determines the primary type
      * based on enrollment status.
-     * 
+     *
      * Note: Android doesn't provide a direct API to query which specific biometry types are enrolled,
      * only whether any biometric is enrolled. This method uses hardware feature detection combined
      * with enrollment status to provide the most accurate information possible.
-     * 
+     *
      * @param biometricManager BiometricManager instance
      * @param biometricEnrolled Whether any biometric is enrolled (from canAuthenticate check)
      * @return BiometryInfo containing primaryType and supportedTypes array
@@ -201,7 +202,7 @@ public class NativeBiometric extends Plugin {
         JSArray supportedTypes = new JSArray();
         int hardwareTypeCount = 0;
         int lastDetectedType = NONE;
-        
+
         if (hasFingerprint) {
             supportedTypes.put(FINGERPRINT);
             lastDetectedType = FINGERPRINT;
