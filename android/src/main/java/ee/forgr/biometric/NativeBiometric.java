@@ -67,6 +67,20 @@ public class NativeBiometric extends Plugin {
     private static final int AUTH_STRENGTH_STRONG = 1;
     private static final int AUTH_STRENGTH_WEAK = 2;
 
+    /**
+     * Helper class to hold biometry type information
+     */
+    private static class BiometryInfo {
+
+        int primaryType;
+        JSArray supportedTypes;
+
+        BiometryInfo(int primaryType, JSArray supportedTypes) {
+            this.primaryType = primaryType;
+            this.supportedTypes = supportedTypes;
+        }
+    }
+
     private KeyStore keyStore;
     private static final String ANDROID_KEY_STORE = "AndroidKeyStore";
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
@@ -109,9 +123,13 @@ public class NativeBiometric extends Plugin {
         boolean deviceIsSecure = this.deviceHasCredentials();
         boolean fallbackAvailable = useFallback && deviceIsSecure;
 
-        // Determine biometry type
-        int biometryType = detectBiometryType(biometricManager);
-        ret.put("biometryType", biometryType);
+        // Check if any biometric is enrolled (either strong or weak)
+        boolean biometricEnrolled = hasStrongBiometric || hasWeakBiometric;
+
+        // Determine biometry type and supported types
+        BiometryInfo biometryInfo = detectBiometryType(biometricManager, biometricEnrolled);
+        ret.put("biometryType", biometryInfo.primaryType);
+        ret.put("biometryTypes", biometryInfo.supportedTypes);
 
         // Device is secure if it has PIN/pattern/password
         ret.put("deviceIsSecure", deviceIsSecure);
@@ -161,34 +179,60 @@ public class NativeBiometric extends Plugin {
     }
 
     /**
-     * Detect the primary biometry type available on the device.
-     * Note: Android doesn't provide a direct API to query specific biometry types,
-     * so we check for hardware features. This is informational only - always use
-     * isAvailable for logic decisions as hardware presence doesn't guarantee availability.
+     * Detect the primary biometry type and all supported types available on the device.
+     * Returns information about hardware-supported biometric types and determines the primary type
+     * based on enrollment status.
+     *
+     * Note: Android doesn't provide a direct API to query which specific biometry types are enrolled,
+     * only whether any biometric is enrolled. This method uses hardware feature detection combined
+     * with enrollment status to provide the most accurate information possible.
+     *
+     * @param biometricManager BiometricManager instance
+     * @param biometricEnrolled Whether any biometric is enrolled (from canAuthenticate check)
+     * @return BiometryInfo containing primaryType and supportedTypes array
      */
-    private int detectBiometryType(BiometricManager biometricManager) {
+    private BiometryInfo detectBiometryType(BiometricManager biometricManager, boolean biometricEnrolled) {
         PackageManager pm = getContext().getPackageManager();
 
         boolean hasFingerprint = pm.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT);
         boolean hasFace = pm.hasSystemFeature(PackageManager.FEATURE_FACE);
         boolean hasIris = pm.hasSystemFeature(PackageManager.FEATURE_IRIS);
 
-        int typeCount = 0;
-        if (hasFingerprint) typeCount++;
-        if (hasFace) typeCount++;
-        if (hasIris) typeCount++;
+        // Build array of all supported hardware types
+        JSArray supportedTypes = new JSArray();
+        int hardwareTypeCount = 0;
+        int lastDetectedType = NONE;
 
-        if (typeCount > 1) {
-            return MULTIPLE; // Multiple biometry types available
-        } else if (hasFingerprint) {
-            return FINGERPRINT;
-        } else if (hasFace) {
-            return FACE_AUTHENTICATION;
-        } else if (hasIris) {
-            return IRIS_AUTHENTICATION;
+        if (hasFingerprint) {
+            supportedTypes.put(FINGERPRINT);
+            lastDetectedType = FINGERPRINT;
+            hardwareTypeCount++;
+        }
+        if (hasFace) {
+            supportedTypes.put(FACE_AUTHENTICATION);
+            lastDetectedType = FACE_AUTHENTICATION;
+            hardwareTypeCount++;
+        }
+        if (hasIris) {
+            supportedTypes.put(IRIS_AUTHENTICATION);
+            lastDetectedType = IRIS_AUTHENTICATION;
+            hardwareTypeCount++;
         }
 
-        return NONE;
+        // Determine primary type based on hardware count and enrollment status
+        int primaryType;
+        if (hardwareTypeCount == 0) {
+            // No biometric hardware
+            primaryType = NONE;
+        } else if (hardwareTypeCount == 1) {
+            // Single hardware type: return specific type if enrolled, NONE if not
+            primaryType = biometricEnrolled ? lastDetectedType : NONE;
+        } else {
+            // Multiple hardware types: return MULTIPLE if enrolled, NONE if not
+            primaryType = biometricEnrolled ? MULTIPLE : NONE;
+        }
+
+        return new BiometryInfo(primaryType, supportedTypes);
     }
 
     @PluginMethod

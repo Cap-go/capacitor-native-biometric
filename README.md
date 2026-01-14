@@ -51,6 +51,20 @@ async performBiometricVerification(){
   // Check if strong biometry (Face ID, Touch ID, fingerprint) is available
   console.log('Strong biometry available:', result.strongBiometryIsAvailable);
 
+  // NEW in 8.1.0: Check which biometric hardware types are supported
+  // This helps you determine if users can enroll additional biometric types
+  if (result.biometryTypes) {
+    const hasFingerprint = result.biometryTypes.includes(BiometryType.FINGERPRINT);
+    const hasFaceAuth = result.biometryTypes.includes(BiometryType.FACE_AUTHENTICATION);
+    
+    // On Android: If device has face hardware but biometrics aren't enrolled,
+    // you can prompt user to enroll face authentication
+    if (hasFaceAuth && !result.isAvailable) {
+      console.log('Face authentication supported but not enrolled');
+      // Prompt user to enroll in device settings
+    }
+  }
+
   const verified = await NativeBiometric.verifyIdentity({
     reason: "For easy log in",
     title: "Log in",
@@ -280,14 +294,15 @@ Get the native Capacitor plugin version.
 
 Result from isAvailable() method indicating biometric authentication availability.
 
-| Prop                            | Type                                                                      | Description                                                                                                                                                                                                 |
-| ------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`isAvailable`**               | <code>boolean</code>                                                      | Whether authentication is available (biometric or fallback if useFallback is true)                                                                                                                          |
-| **`authenticationStrength`**    | <code><a href="#authenticationstrength">AuthenticationStrength</a></code> | The strength of available authentication method (STRONG, WEAK, or NONE)                                                                                                                                     |
-| **`biometryType`**              | <code><a href="#biometrytype">BiometryType</a></code>                     | The primary biometry type available on the device. On Android devices with multiple biometry types, this returns MULTIPLE. Use this for display purposes only - always use isAvailable for logic decisions. |
-| **`deviceIsSecure`**            | <code>boolean</code>                                                      | Whether the device has a secure lock screen (PIN, pattern, or password). This is independent of biometric enrollment.                                                                                       |
-| **`strongBiometryIsAvailable`** | <code>boolean</code>                                                      | Whether strong biometry (Face ID, Touch ID, or fingerprint on devices that consider it strong) is specifically available, separate from weak biometry or device credentials.                                |
-| **`errorCode`**                 | <code><a href="#biometricautherror">BiometricAuthError</a></code>         | Error code from <a href="#biometricautherror">BiometricAuthError</a> enum. Only present when isAvailable is false. Indicates why biometric authentication is not available.                                 |
+| Prop                            | Type                                                                      | Description                                                                                                                                                                                                                                                                                                         | Since |
+| ------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **`isAvailable`**               | <code>boolean</code>                                                      | Whether authentication is available (biometric or fallback if useFallback is true)                                                                                                                                                                                                                                  |       |
+| **`authenticationStrength`**    | <code><a href="#authenticationstrength">AuthenticationStrength</a></code> | The strength of available authentication method (STRONG, WEAK, or NONE)                                                                                                                                                                                                                                             |       |
+| **`biometryType`**              | <code><a href="#biometrytype">BiometryType</a></code>                     | The primary biometry type available on the device. On Android devices with multiple biometry types enrolled, this returns MULTIPLE. On Android devices with multiple hardware types but no biometrics enrolled, this returns NONE. Use this for display purposes only - always use isAvailable for logic decisions. |       |
+| **`deviceIsSecure`**            | <code>boolean</code>                                                      | Whether the device has a secure lock screen (PIN, pattern, or password). This is independent of biometric enrollment.                                                                                                                                                                                               |       |
+| **`strongBiometryIsAvailable`** | <code>boolean</code>                                                      | Whether strong biometry (Face ID, Touch ID, or fingerprint on devices that consider it strong) is specifically available, separate from weak biometry or device credentials.                                                                                                                                        |       |
+| **`errorCode`**                 | <code><a href="#biometricautherror">BiometricAuthError</a></code>         | Error code from <a href="#biometricautherror">BiometricAuthError</a> enum. Only present when isAvailable is false. Indicates why biometric authentication is not available.                                                                                                                                         |       |
+| **`biometryTypes`**             | <code>BiometryType[]</code>                                               | Array of biometry types that are supported by the device hardware. This indicates which biometric sensors are physically present, regardless of enrollment status. On Android, use this in combination with isAvailable to determine if users can enroll biometrics.                                                | 8.1.0 |
 
 
 #### IsAvailableOptions

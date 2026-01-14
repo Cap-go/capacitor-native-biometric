@@ -60,7 +60,8 @@ export interface AvailableResult {
   authenticationStrength: AuthenticationStrength;
   /**
    * The primary biometry type available on the device.
-   * On Android devices with multiple biometry types, this returns MULTIPLE.
+   * On Android devices with multiple biometry types enrolled, this returns MULTIPLE.
+   * On Android devices with multiple hardware types but no biometrics enrolled, this returns NONE.
    * Use this for display purposes only - always use isAvailable for logic decisions.
    */
   biometryType: BiometryType;
@@ -80,6 +81,13 @@ export interface AvailableResult {
    * @see BiometricAuthError
    */
   errorCode?: BiometricAuthError;
+  /**
+   * Array of biometry types that are supported by the device hardware.
+   * This indicates which biometric sensors are physically present, regardless of enrollment status.
+   * On Android, use this in combination with isAvailable to determine if users can enroll biometrics.
+   * @since 8.1.0
+   */
+  biometryTypes?: BiometryType[];
 }
 
 export interface BiometricOptions {
