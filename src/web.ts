@@ -16,7 +16,11 @@ import type {
 import { BiometryType, AuthenticationStrength } from './definitions';
 
 export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlugin {
-  // In-memory credential storage for browser development
+  /**
+   * In-memory credential storage for browser development/testing.
+   * Credentials are stored temporarily and cleared on page refresh.
+   * This is NOT secure storage and should only be used for development purposes.
+   */
   private credentialStore: Map<string, Credentials> = new Map();
 
   constructor() {
@@ -25,6 +29,7 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
 
   isAvailable(): Promise<AvailableResult> {
     // Web platform: return a dummy implementation for development/testing
+    // Using TOUCH_ID as a generic placeholder for simulated biometric authentication
     return Promise.resolve({
       isAvailable: true,
       authenticationStrength: AuthenticationStrength.STRONG,
@@ -55,7 +60,7 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
     // Dummy implementation: retrieve from in-memory store
     const credentials = this.credentialStore.get(_options.server);
     if (!credentials) {
-      throw new Error(`[Dummy implementation] No credentials found for server: ${_options.server}`);
+      throw new Error('[Dummy implementation] No credentials found for the specified server');
     }
     return Promise.resolve(credentials);
   }
