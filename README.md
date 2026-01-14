@@ -77,6 +77,7 @@ async function secureAuthentication() {
   const { isRooted } = await RootChecker.isRooted();
   if (isRooted) {
     // Handle rooted device appropriately
+    // Example: showSecurityWarning() could display an alert to the user
     showSecurityWarning();
     // Optionally: disable biometric login, require re-authentication, etc.
   }
@@ -98,6 +99,8 @@ async function secureAuthentication() {
   });
 
   // 4. CRITICAL: Validate credentials with your backend server
+  // Example: validateWithServer() should send credentials to your API
+  // and verify them server-side before granting access
   const isValid = await validateWithServer(credentials.username, credentials.password);
   
   return isValid;
