@@ -168,6 +168,9 @@ public class AuthActivity extends AppCompatActivity {
                 case 5: // IRIS_AUTHENTICATION
                     authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
                     break;
+                case 6: // MULTIPLE - allow all biometric types
+                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
+                    break;
                 case 7: // DEVICE_CREDENTIAL (PIN, pattern, or password)
                     authenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
                     break;
