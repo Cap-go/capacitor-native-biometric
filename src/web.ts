@@ -16,18 +16,21 @@ import type {
 import { BiometryType, AuthenticationStrength } from './definitions';
 
 export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlugin {
+  // In-memory credential storage for browser development
+  private credentialStore: Map<string, Credentials> = new Map();
+
   constructor() {
     super();
   }
 
   isAvailable(): Promise<AvailableResult> {
-    // Web platform: biometrics not available, but return structured response
+    // Web platform: return a dummy implementation for development/testing
     return Promise.resolve({
-      isAvailable: false,
-      authenticationStrength: AuthenticationStrength.NONE,
-      biometryType: BiometryType.NONE,
-      deviceIsSecure: false,
-      strongBiometryIsAvailable: false,
+      isAvailable: true,
+      authenticationStrength: AuthenticationStrength.STRONG,
+      biometryType: BiometryType.TOUCH_ID,
+      deviceIsSecure: true,
+      strongBiometryIsAvailable: true,
     });
   }
 
@@ -42,29 +45,42 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
   }
 
   verifyIdentity(_options?: BiometricOptions): Promise<void> {
-    console.log('verifyIdentity', _options);
-    throw new Error('Biometric authentication is not available on web platform.');
+    console.log('verifyIdentity (dummy implementation)', _options);
+    // Dummy implementation: always succeeds for browser testing
+    return Promise.resolve();
   }
 
   getCredentials(_options: GetCredentialOptions): Promise<Credentials> {
-    console.log('getCredentials', _options);
-    throw new Error('Credential storage is not available on web platform.');
+    console.log('getCredentials (dummy implementation)', _options);
+    // Dummy implementation: retrieve from in-memory store
+    const credentials = this.credentialStore.get(_options.server);
+    if (!credentials) {
+      throw new Error(`No credentials found for server: ${_options.server}`);
+    }
+    return Promise.resolve(credentials);
   }
 
   setCredentials(_options: SetCredentialOptions): Promise<void> {
-    console.log('setCredentials', _options);
-    throw new Error('Credential storage is not available on web platform.');
+    console.log('setCredentials (dummy implementation)', _options);
+    // Dummy implementation: store in memory
+    this.credentialStore.set(_options.server, {
+      username: _options.username,
+      password: _options.password,
+    });
+    return Promise.resolve();
   }
 
   deleteCredentials(_options: DeleteCredentialOptions): Promise<void> {
-    console.log('deleteCredentials', _options);
-    throw new Error('Credential storage is not available on web platform.');
+    console.log('deleteCredentials (dummy implementation)', _options);
+    // Dummy implementation: remove from in-memory store
+    this.credentialStore.delete(_options.server);
+    return Promise.resolve();
   }
 
   isCredentialsSaved(_options: IsCredentialsSavedOptions): Promise<IsCredentialsSavedResult> {
-    console.log('isCredentialsSaved', _options);
-    // Return false on web - no credentials can be saved
-    return Promise.resolve({ isSaved: false });
+    console.log('isCredentialsSaved (dummy implementation)', _options);
+    // Dummy implementation: check in-memory store
+    return Promise.resolve({ isSaved: this.credentialStore.has(_options.server) });
   }
 
   async getPluginVersion(): Promise<{ version: string }> {
