@@ -228,7 +228,9 @@ public class NativeBiometric extends Plugin {
         }
 
         // Note: useFallback parameter is ignored on Android (iOS-only feature)
-        // It is gracefully ignored to prevent crashes
+        // Android's BiometricPrompt doesn't support fallback to device credentials when a negative button is present.
+        // The API constraint: setNegativeButtonText() and DEVICE_CREDENTIAL authenticator are mutually exclusive.
+        // Since we need the negative button for user cancellation, fallback cannot be supported on Android.
 
         startActivityForResult(call, intent, "verifyResult");
     }

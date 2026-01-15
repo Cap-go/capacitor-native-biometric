@@ -45,6 +45,10 @@ public class AuthActivity extends AppCompatActivity {
             .setDescription(getIntent().hasExtra("description") ? getIntent().getStringExtra("description") : null);
 
         // Note: useFallback parameter is ignored on Android (iOS-only feature)
+        // Android's BiometricPrompt API has a constraint: when DEVICE_CREDENTIAL authenticator is used,
+        // setNegativeButtonText() cannot be called (it will throw IllegalArgumentException).
+        // Since this plugin always provides a cancel button for consistency, we cannot support
+        // device credential fallback. Users should use system settings to enroll biometrics instead.
         int[] allowedTypes = getIntent().getIntArrayExtra("allowedBiometryTypes");
 
         int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
