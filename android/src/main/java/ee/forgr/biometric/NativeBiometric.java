@@ -384,9 +384,9 @@ public class NativeBiometric extends Plugin {
         byte[] combined = Base64.decode(stringToDecrypt, Base64.DEFAULT);
         
         // Try new format first (IV prepended to ciphertext)
-        // AES-GCM with 128-bit tag produces at least 16 bytes of ciphertext for non-empty plaintext
-        // Combined with 12-byte IV, minimum length should be > 12 bytes for new format
-        if (combined.length > GCM_IV_LENGTH) {
+        // New format has 12-byte IV + ciphertext (which includes auth tag)
+        // Minimum valid length is IV + at least 1 byte of ciphertext
+        if (combined.length >= GCM_IV_LENGTH + 1) {
             try {
                 // Extract IV from the beginning of the data
                 byte[] iv = new byte[GCM_IV_LENGTH];
@@ -405,8 +405,7 @@ public class NativeBiometric extends Plugin {
                 // Padding error - likely means data was encrypted with legacy format
                 // Fall through to legacy decryption attempt
             } catch (GeneralSecurityException e) {
-                // Other security exceptions should not be masked - log and rethrow
-                System.err.println("Unexpected decryption error: " + e.getMessage());
+                // Other security exceptions should not be masked - rethrow
                 throw e;
             }
         }
