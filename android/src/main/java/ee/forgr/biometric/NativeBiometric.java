@@ -61,6 +61,7 @@ public class NativeBiometric extends Plugin {
     private static final int FACE_AUTHENTICATION = 4;
     private static final int IRIS_AUTHENTICATION = 5;
     private static final int MULTIPLE = 6;
+    private static final int DEVICE_CREDENTIAL = 7;
 
     // AuthenticationStrength enum values
     private static final int AUTH_STRENGTH_NONE = 0;
@@ -186,6 +187,12 @@ public class NativeBiometric extends Plugin {
             return FACE_AUTHENTICATION;
         } else if (hasIris) {
             return IRIS_AUTHENTICATION;
+        }
+
+        // If no biometric sensors are available but device has credentials (PIN/pattern/password)
+        // return DEVICE_CREDENTIAL type
+        if (this.deviceHasCredentials()) {
+            return DEVICE_CREDENTIAL;
         }
 
         return NONE;
