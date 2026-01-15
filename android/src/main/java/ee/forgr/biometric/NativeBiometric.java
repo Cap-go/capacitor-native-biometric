@@ -384,8 +384,8 @@ public class NativeBiometric extends Plugin {
         byte[] combined = Base64.decode(stringToDecrypt, Base64.DEFAULT);
         
         // Try new format first (IV prepended to ciphertext)
-        // New format has 12-byte IV + ciphertext (which includes auth tag)
-        // Minimum valid length is IV + at least 1 byte of ciphertext
+        // New format has 12-byte IV + ciphertext (which includes 16-byte auth tag)
+        // However, we use >= GCM_IV_LENGTH + 1 to be permissive, as the cipher will validate the auth tag
         if (combined.length >= GCM_IV_LENGTH + 1) {
             try {
                 // Extract IV from the beginning of the data
@@ -398,12 +398,9 @@ public class NativeBiometric extends Plugin {
                 cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, iv));
                 byte[] decryptedData = cipher.doFinal(encryptedData);
                 return new String(decryptedData, StandardCharsets.UTF_8);
-            } catch (javax.crypto.AEADBadTagException e) {
-                // Authentication tag verification failed - likely means data was encrypted with legacy format
-                // Fall through to legacy decryption attempt
-            } catch (javax.crypto.BadPaddingException e) {
-                // Padding error - likely means data was encrypted with legacy format
-                // Fall through to legacy decryption attempt
+            } catch (javax.crypto.AEADBadTagException | javax.crypto.BadPaddingException e) {
+                // Authentication tag verification failed or padding error
+                // Likely means data was encrypted with legacy format - fall through to legacy decryption
             } catch (GeneralSecurityException e) {
                 // Other security exceptions should not be masked - rethrow
                 throw e;
