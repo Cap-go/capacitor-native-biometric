@@ -40,13 +40,13 @@ import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Objects;
+import javax.crypto.AEADBadTagException;
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
 import javax.crypto.KeyGenerator;
 import javax.crypto.NoSuchPaddingException;
-import javax.crypto.AEADBadTagException;
-import javax.crypto.BadPaddingException;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.json.JSONException;
@@ -365,26 +365,26 @@ public class NativeBiometric extends Plugin {
     private String encryptString(String stringToEncrypt, String KEY_ALIAS) throws GeneralSecurityException, IOException {
         Cipher cipher;
         cipher = Cipher.getInstance(TRANSFORMATION);
-        
+
         // Generate a random IV for each encryption operation
         byte[] iv = new byte[GCM_IV_LENGTH];
         SecureRandom secureRandom = new SecureRandom();
         secureRandom.nextBytes(iv);
-        
+
         cipher.init(Cipher.ENCRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, iv));
         byte[] encryptedBytes = cipher.doFinal(stringToEncrypt.getBytes(StandardCharsets.UTF_8));
-        
+
         // Prepend IV to the encrypted data
         byte[] combined = new byte[iv.length + encryptedBytes.length];
         System.arraycopy(iv, 0, combined, 0, iv.length);
         System.arraycopy(encryptedBytes, 0, combined, iv.length, encryptedBytes.length);
-        
+
         return Base64.encodeToString(combined, Base64.DEFAULT);
     }
 
     private String decryptString(String stringToDecrypt, String KEY_ALIAS) throws GeneralSecurityException, IOException {
         byte[] combined = Base64.decode(stringToDecrypt, Base64.DEFAULT);
-        
+
         // Try new format first (IV prepended to ciphertext)
         // New format: 12-byte IV + ciphertext (plaintext + 16-byte GCM auth tag)
         // We check for > GCM_IV_LENGTH to ensure there's at least some ciphertext beyond just the IV
@@ -409,7 +409,7 @@ public class NativeBiometric extends Plugin {
                 throw e;
             }
         }
-        
+
         // Fallback to legacy format (FIXED_IV - all zeros)
         // This branch handles credentials encrypted with the old vulnerable method
         byte[] LEGACY_FIXED_IV = new byte[12]; // All zeros by default
