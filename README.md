@@ -119,6 +119,17 @@ This plugin does NOT provide:
 - ❌ Server-side authentication or validation
 - ❌ Root/jailbreak detection (use [@capgo/capacitor-is-root](https://github.com/Cap-go/capacitor-is-root))
 
+### Recent Security Improvements (v8.2.0+)
+
+**Android Encryption Enhancement**: The Android implementation now uses properly randomized Initialization Vectors (IVs) for AES-GCM encryption of stored credentials. Previous versions used a fixed IV, which is a cryptographic vulnerability. 
+
+**Automatic Migration**: The plugin automatically handles credentials encrypted with the older method:
+- When reading credentials, it first attempts the new secure format, then falls back to the legacy format if needed
+- When saving credentials, they are always encrypted using the new secure format
+- No action required from users - migration happens transparently on first credential save after update
+
+**Recommendation**: After updating to v8.2.0+, users should re-save their credentials to ensure they're encrypted with the improved format. This happens automatically when users authenticate and save credentials again.
+
 ## Installation (Only supports Capacitor 7)
 
 - `npm i @capgo/capacitor-native-biometric`

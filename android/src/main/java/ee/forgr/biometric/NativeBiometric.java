@@ -383,16 +383,31 @@ public class NativeBiometric extends Plugin {
     private String decryptString(String stringToDecrypt, String KEY_ALIAS) throws GeneralSecurityException, IOException {
         byte[] combined = Base64.decode(stringToDecrypt, Base64.DEFAULT);
         
-        // Extract IV from the beginning of the data
-        byte[] iv = new byte[GCM_IV_LENGTH];
-        byte[] encryptedData = new byte[combined.length - GCM_IV_LENGTH];
-        System.arraycopy(combined, 0, iv, 0, GCM_IV_LENGTH);
-        System.arraycopy(combined, GCM_IV_LENGTH, encryptedData, 0, encryptedData.length);
+        // Try new format first (IV prepended to ciphertext)
+        if (combined.length > GCM_IV_LENGTH) {
+            try {
+                // Extract IV from the beginning of the data
+                byte[] iv = new byte[GCM_IV_LENGTH];
+                byte[] encryptedData = new byte[combined.length - GCM_IV_LENGTH];
+                System.arraycopy(combined, 0, iv, 0, GCM_IV_LENGTH);
+                System.arraycopy(combined, GCM_IV_LENGTH, encryptedData, 0, encryptedData.length);
 
-        Cipher cipher;
-        cipher = Cipher.getInstance(TRANSFORMATION);
-        cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, iv));
-        byte[] decryptedData = cipher.doFinal(encryptedData);
+                Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+                cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, iv));
+                byte[] decryptedData = cipher.doFinal(encryptedData);
+                return new String(decryptedData, StandardCharsets.UTF_8);
+            } catch (GeneralSecurityException e) {
+                // If decryption with extracted IV fails, try legacy format with fixed IV
+                // This provides backward compatibility with data encrypted using the old vulnerable method
+            }
+        }
+        
+        // Fallback to legacy format (FIXED_IV - all zeros)
+        // This branch handles credentials encrypted with the old vulnerable method
+        byte[] LEGACY_FIXED_IV = new byte[12]; // All zeros by default
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, LEGACY_FIXED_IV));
+        byte[] decryptedData = cipher.doFinal(combined);
         return new String(decryptedData, StandardCharsets.UTF_8);
     }
 
