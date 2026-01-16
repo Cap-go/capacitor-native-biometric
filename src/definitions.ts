@@ -43,7 +43,10 @@ export interface Credentials {
 
 export interface IsAvailableOptions {
   /**
+   * Only for iOS.
    * Specifies if should fallback to passcode authentication if biometric authentication is not available.
+   * On Android, this parameter is ignored due to BiometricPrompt API constraints:
+   * DEVICE_CREDENTIAL authenticator and negative button (cancel) are mutually exclusive.
    */
   useFallback: boolean;
 }
@@ -91,7 +94,10 @@ export interface BiometricOptions {
   description?: string;
   negativeButtonText?: string;
   /**
+   * Only for iOS.
    * Specifies if should fallback to passcode authentication if biometric authentication fails.
+   * On Android, this parameter is ignored due to BiometricPrompt API constraints:
+   * DEVICE_CREDENTIAL authenticator and negative button (cancel) are mutually exclusive.
    */
   useFallback?: boolean;
   /**

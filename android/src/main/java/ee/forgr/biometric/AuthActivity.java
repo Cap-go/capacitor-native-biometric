@@ -44,23 +44,22 @@ public class AuthActivity extends AppCompatActivity {
             .setSubtitle(getIntent().hasExtra("subtitle") ? getIntent().getStringExtra("subtitle") : null)
             .setDescription(getIntent().hasExtra("description") ? getIntent().getStringExtra("description") : null);
 
-        boolean useFallback = getIntent().getBooleanExtra("useFallback", false);
+        // Note: useFallback parameter is ignored on Android (iOS-only feature)
+        // Android's BiometricPrompt API has a constraint: when DEVICE_CREDENTIAL authenticator is used,
+        // setNegativeButtonText() cannot be called (it will throw IllegalArgumentException).
+        // Since this plugin always provides a cancel button for consistency, we cannot support
+        // device credential fallback. Users should use system settings to enroll biometrics instead.
         int[] allowedTypes = getIntent().getIntArrayExtra("allowedBiometryTypes");
 
         int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
-        if (useFallback) {
-            authenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
-        }
         if (allowedTypes != null) {
             // Filter authenticators based on allowed types
             authenticators = getAllowedAuthenticators(allowedTypes);
         }
         builder.setAllowedAuthenticators(authenticators);
 
-        if (!useFallback) {
-            String negativeText = getIntent().getStringExtra("negativeButtonText");
-            builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
-        }
+        String negativeText = getIntent().getStringExtra("negativeButtonText");
+        builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
 
         BiometricPrompt.PromptInfo promptInfo = builder.build();
 
