@@ -40,7 +40,6 @@ import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Objects;
-import javax.crypto.AEADBadTagException;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
@@ -401,8 +400,9 @@ public class NativeBiometric extends Plugin {
                 cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, iv));
                 byte[] decryptedData = cipher.doFinal(encryptedData);
                 return new String(decryptedData, StandardCharsets.UTF_8);
-            } catch (AEADBadTagException | BadPaddingException e) {
-                // Authentication tag verification failed or padding error
+            } catch (BadPaddingException e) {
+                // Authentication tag verification failed (AEADBadTagException) or padding error
+                // BadPaddingException is the parent class of AEADBadTagException
                 // Likely means data was encrypted with legacy format - fall through to legacy decryption
             } catch (GeneralSecurityException e) {
                 // Other security exceptions should not be masked - rethrow
