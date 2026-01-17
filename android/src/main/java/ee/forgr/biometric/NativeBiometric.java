@@ -40,6 +40,7 @@ import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Objects;
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
@@ -87,7 +88,7 @@ public class NativeBiometric extends Plugin {
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
     private static final String RSA_MODE = "RSA/ECB/PKCS1Padding";
     private static final String AES_MODE = "AES/ECB/PKCS7Padding";
-    private static final byte[] FIXED_IV = new byte[12];
+    private static final int GCM_IV_LENGTH = 12;
     private static final String ENCRYPTED_KEY = "NativeBiometricKey";
     private static final String NATIVE_BIOMETRIC_SHARED_PREFERENCES = "NativeBiometricSharedPreferences";
 
@@ -276,12 +277,10 @@ public class NativeBiometric extends Plugin {
             intent.putExtra("allowedBiometryTypes", types);
         }
 
-        boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));
-        if (useFallback) {
-            useFallback = this.deviceHasCredentials();
-        }
-
-        intent.putExtra("useFallback", useFallback);
+        // Note: useFallback parameter is ignored on Android (iOS-only feature)
+        // Android's BiometricPrompt doesn't support fallback to device credentials when a negative button is present.
+        // The API constraint: setNegativeButtonText() and DEVICE_CREDENTIAL authenticator are mutually exclusive.
+        // Since we need the negative button for user cancellation, fallback cannot be supported on Android.
 
         startActivityForResult(call, intent, "verifyResult");
     }
@@ -405,18 +404,58 @@ public class NativeBiometric extends Plugin {
     private String encryptString(String stringToEncrypt, String KEY_ALIAS) throws GeneralSecurityException, IOException {
         Cipher cipher;
         cipher = Cipher.getInstance(TRANSFORMATION);
-        cipher.init(Cipher.ENCRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, FIXED_IV));
-        byte[] encodedBytes = cipher.doFinal(stringToEncrypt.getBytes(StandardCharsets.UTF_8));
-        return Base64.encodeToString(encodedBytes, Base64.DEFAULT);
+
+        // Generate a random IV for each encryption operation
+        byte[] iv = new byte[GCM_IV_LENGTH];
+        SecureRandom secureRandom = new SecureRandom();
+        secureRandom.nextBytes(iv);
+
+        cipher.init(Cipher.ENCRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, iv));
+        byte[] encryptedBytes = cipher.doFinal(stringToEncrypt.getBytes(StandardCharsets.UTF_8));
+
+        // Prepend IV to the encrypted data
+        byte[] combined = new byte[iv.length + encryptedBytes.length];
+        System.arraycopy(iv, 0, combined, 0, iv.length);
+        System.arraycopy(encryptedBytes, 0, combined, iv.length, encryptedBytes.length);
+
+        return Base64.encodeToString(combined, Base64.DEFAULT);
     }
 
     private String decryptString(String stringToDecrypt, String KEY_ALIAS) throws GeneralSecurityException, IOException {
-        byte[] encryptedData = Base64.decode(stringToDecrypt, Base64.DEFAULT);
+        byte[] combined = Base64.decode(stringToDecrypt, Base64.DEFAULT);
 
-        Cipher cipher;
-        cipher = Cipher.getInstance(TRANSFORMATION);
-        cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, FIXED_IV));
-        byte[] decryptedData = cipher.doFinal(encryptedData);
+        // Try new format first (IV prepended to ciphertext)
+        // New format: 12-byte IV + ciphertext (plaintext + 16-byte GCM auth tag)
+        // We check for > GCM_IV_LENGTH to ensure there's at least some ciphertext beyond just the IV
+        // The cipher's doFinal() will validate the auth tag and fail if data is malformed
+        if (combined.length >= GCM_IV_LENGTH + 1) {
+            try {
+                // Extract IV from the beginning of the data
+                byte[] iv = new byte[GCM_IV_LENGTH];
+                byte[] encryptedData = new byte[combined.length - GCM_IV_LENGTH];
+                System.arraycopy(combined, 0, iv, 0, GCM_IV_LENGTH);
+                System.arraycopy(combined, GCM_IV_LENGTH, encryptedData, 0, encryptedData.length);
+
+                Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+                cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, iv));
+                byte[] decryptedData = cipher.doFinal(encryptedData);
+                return new String(decryptedData, StandardCharsets.UTF_8);
+            } catch (BadPaddingException e) {
+                // Authentication tag verification failed (AEADBadTagException) or padding error
+                // BadPaddingException is the parent class of AEADBadTagException
+                // Likely means data was encrypted with legacy format - fall through to legacy decryption
+            } catch (GeneralSecurityException e) {
+                // Other security exceptions should not be masked - rethrow
+                throw e;
+            }
+        }
+
+        // Fallback to legacy format (FIXED_IV - all zeros)
+        // This branch handles credentials encrypted with the old vulnerable method
+        byte[] LEGACY_FIXED_IV = new byte[12]; // All zeros by default
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, LEGACY_FIXED_IV));
+        byte[] decryptedData = cipher.doFinal(combined);
         return new String(decryptedData, StandardCharsets.UTF_8);
     }
 
@@ -452,8 +491,7 @@ public class NativeBiometric extends Plugin {
             KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
         )
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setRandomizedEncryptionRequired(false);
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || Build.VERSION.SDK_INT > 34) {
