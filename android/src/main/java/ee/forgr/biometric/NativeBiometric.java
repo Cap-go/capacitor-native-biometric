@@ -363,12 +363,15 @@ public class NativeBiometric extends Plugin {
         Cipher cipher;
         cipher = Cipher.getInstance(TRANSFORMATION);
 
-        // Generate a random IV for each encryption operation
-        byte[] iv = new byte[GCM_IV_LENGTH];
-        SecureRandom secureRandom = new SecureRandom();
-        secureRandom.nextBytes(iv);
-
-        cipher.init(Cipher.ENCRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, iv));
+        // Let the system generate the IV to comply with hardware-backed keystore requirements
+        // Modern Android devices with StrongBox/TEE enforce RandomizedEncryption and reject caller-provided IVs
+        cipher.init(Cipher.ENCRYPT_MODE, getKey(KEY_ALIAS));
+        byte[] iv = cipher.getIV(); // Retrieve the system-generated IV
+        if (iv == null || iv.length != GCM_IV_LENGTH) {
+            throw new GeneralSecurityException(
+                "Failed to generate valid IV: expected " + GCM_IV_LENGTH + " bytes, got " + (iv == null ? "null" : iv.length + " bytes")
+            );
+        }
         byte[] encryptedBytes = cipher.doFinal(stringToEncrypt.getBytes(StandardCharsets.UTF_8));
 
         // Prepend IV to the encrypted data
