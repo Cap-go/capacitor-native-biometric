@@ -367,6 +367,9 @@ public class NativeBiometric extends Plugin {
         // Modern Android devices with StrongBox/TEE enforce RandomizedEncryption and reject caller-provided IVs
         cipher.init(Cipher.ENCRYPT_MODE, getKey(KEY_ALIAS));
         byte[] iv = cipher.getIV(); // Retrieve the system-generated IV
+        if (iv == null || iv.length != GCM_IV_LENGTH) {
+            throw new GeneralSecurityException("Failed to generate valid IV");
+        }
         byte[] encryptedBytes = cipher.doFinal(stringToEncrypt.getBytes(StandardCharsets.UTF_8));
 
         // Prepend IV to the encrypted data
