@@ -368,7 +368,10 @@ public class NativeBiometric extends Plugin {
         cipher.init(Cipher.ENCRYPT_MODE, getKey(KEY_ALIAS));
         byte[] iv = cipher.getIV(); // Retrieve the system-generated IV
         if (iv == null || iv.length != GCM_IV_LENGTH) {
-            throw new GeneralSecurityException("Failed to generate valid IV");
+            throw new GeneralSecurityException(
+                "Failed to generate valid IV: expected " + GCM_IV_LENGTH + " bytes, got " +
+                (iv == null ? "null" : iv.length + " bytes")
+            );
         }
         byte[] encryptedBytes = cipher.doFinal(stringToEncrypt.getBytes(StandardCharsets.UTF_8));
 
