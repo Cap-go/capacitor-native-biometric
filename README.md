@@ -130,6 +130,17 @@ This plugin does NOT provide:
 
 **Recommendation**: After updating to v8.2.0+, users should re-save their credentials to ensure they're encrypted with the improved format. This happens automatically when users authenticate and save credentials again.
 
+## Compatibility
+
+| Plugin version | Capacitor compatibility | Maintained |
+| -------------- | ----------------------- | ---------- |
+| v8.\*.\*       | v8.\*.\*                | ✅          |
+| v7.\*.\*       | v7.\*.\*                | On demand   |
+| v6.\*.\*       | v6.\*.\*                | ❌          |
+| v5.\*.\*       | v5.\*.\*                | ❌          |
+
+> **Note:** The major version of this plugin follows the major version of Capacitor. Use the version that matches your Capacitor installation (e.g., plugin v8 for Capacitor 8). Only the latest major version is actively maintained.
+
 ## Installation (Only supports Capacitor 7)
 
 - `npm i @capgo/capacitor-native-biometric`
