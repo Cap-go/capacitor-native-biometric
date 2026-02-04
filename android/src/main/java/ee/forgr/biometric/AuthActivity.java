@@ -9,12 +9,29 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
 import ee.forgr.biometric.capacitornativebiometric.R;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
 import java.util.Objects;
 import java.util.concurrent.Executor;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyPermanentlyInvalidatedException;
+import android.security.keystore.KeyProperties;
 
 public class AuthActivity extends AppCompatActivity {
 
+    private static final String AUTH_KEY_ALIAS = "NativeBiometricAuthKey";
+    private static final String AUTH_TRANSFORMATION = "AES/GCM/NoPadding";
+
     private BiometricPrompt biometricPrompt;
+    private Cipher authCipher;
     private int maxAttempts;
     private int counter = 0;
 
@@ -83,6 +100,10 @@ public class AuthActivity extends AppCompatActivity {
                 @Override
                 public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
                     super.onAuthenticationSucceeded(result);
+                    if (!validateCryptoObject(result)) {
+                        finishActivity("error", 10, "Biometric security check failed");
+                        return;
+                    }
                     finishActivity();
                 }
 
@@ -99,7 +120,12 @@ public class AuthActivity extends AppCompatActivity {
             }
         );
 
-        biometricPrompt.authenticate(promptInfo);
+        BiometricPrompt.CryptoObject cryptoObject = createCryptoObject();
+        if (cryptoObject == null) {
+            finishActivity("error", 0, "Biometric crypto object unavailable");
+            return;
+        }
+        biometricPrompt.authenticate(promptInfo, cryptoObject);
     }
 
     void finishActivity() {
@@ -117,6 +143,95 @@ public class AuthActivity extends AppCompatActivity {
         }
         setResult(RESULT_OK, intent);
         finish();
+    }
+
+    private BiometricPrompt.CryptoObject createCryptoObject() {
+        try {
+            authCipher = createCipher();
+            return new BiometricPrompt.CryptoObject(authCipher);
+        } catch (GeneralSecurityException | IOException e) {
+            return null;
+        }
+    }
+
+    private Cipher createCipher() throws GeneralSecurityException, IOException {
+        SecretKey secretKey = getOrCreateSecretKey();
+        Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
+        try {
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+        } catch (KeyPermanentlyInvalidatedException e) {
+            deleteSecretKey();
+            secretKey = getOrCreateSecretKey();
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+        }
+        return cipher;
+    }
+
+    private SecretKey getOrCreateSecretKey() throws GeneralSecurityException, IOException {
+        KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+        try {
+            keyStore.load(null);
+        } catch (CertificateException e) {
+            throw new GeneralSecurityException("Failed to load AndroidKeyStore", e);
+        }
+        if (!keyStore.containsAlias(AUTH_KEY_ALIAS)) {
+            generateSecretKey();
+        }
+        try {
+            return (SecretKey) keyStore.getKey(AUTH_KEY_ALIAS, null);
+        } catch (UnrecoverableKeyException e) {
+            throw new GeneralSecurityException("Failed to retrieve biometric auth key", e);
+        }
+    }
+
+    private void generateSecretKey() throws GeneralSecurityException {
+        KeyGenerator keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+        KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(
+            AUTH_KEY_ALIAS,
+            KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
+        )
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setUserAuthenticationRequired(true);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            builder.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG);
+        } else {
+            builder.setUserAuthenticationValidityDurationSeconds(1);
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            builder.setInvalidatedByBiometricEnrollment(true);
+        }
+
+        keyGenerator.init(builder.build());
+        keyGenerator.generateKey();
+    }
+
+    private void deleteSecretKey() throws GeneralSecurityException, IOException {
+        try {
+            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+            keyStore.load(null);
+            keyStore.deleteEntry(AUTH_KEY_ALIAS);
+        } catch (KeyStoreException | NoSuchAlgorithmException | CertificateException e) {
+            throw new GeneralSecurityException("Failed to delete biometric auth key", e);
+        }
+    }
+
+    private boolean validateCryptoObject(BiometricPrompt.AuthenticationResult result) {
+        BiometricPrompt.CryptoObject cryptoObject = result.getCryptoObject();
+        if (cryptoObject == null || cryptoObject.getCipher() == null) {
+            return false;
+        }
+        if (authCipher != null && cryptoObject.getCipher() != authCipher) {
+            return false;
+        }
+        try {
+            cryptoObject.getCipher().doFinal(new byte[] { 0x00 });
+            return true;
+        } catch (GeneralSecurityException | IllegalStateException e) {
+            return false;
+        }
     }
 
     /**
