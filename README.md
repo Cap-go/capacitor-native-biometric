@@ -21,6 +21,8 @@ A **free**, **comprehensive** biometric authentication plugin with secure creden
 - **Resume listener** - Detect biometry availability changes when app returns from background
 - **Modern package management** - Supports both Swift Package Manager (SPM) and CocoaPods (SPM-ready for Capacitor 8)
 
+This plugin is our official alternative to Ionic Appflow Identity Vault.
+
 Perfect for banking apps, password managers, authentication flows, and any app requiring secure user verification.
 
 ## Documentation
