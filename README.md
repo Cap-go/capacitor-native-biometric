@@ -255,6 +255,31 @@ async saveCredentials(username: string, password: string) {
 }
 ```
 
+### Device Security (Vault Key) — FastSQL Integration
+
+This plugin can gate access to an encryption key. Use `unlock()` to authenticate, then
+retrieve the base64 key with `getVaultKey()` and pass it to FastSQL for encryption.
+
+```ts
+import { NativeBiometric } from "@capgo/capacitor-native-biometric";
+
+// Optional runtime config
+await NativeBiometric.updateConfig({
+  lockAfterBackgrounded: -1, // disabled by default
+  allowDeviceCredential: false,
+  maxFailedAttempts: -1, // disabled by default
+});
+
+await NativeBiometric.unlock({ reason: "Unlock secure storage" });
+const { key, keyId } = await NativeBiometric.getVaultKey();
+
+// Use `key` in FastSQL for encryption/decryption
+// await FastSQL.open({ encryptionKey: key, keyId })
+
+// Lock clears secure memory
+await NativeBiometric.lock();
+```
+
 ### Biometric Auth Errors
 
 This is a plugin specific list of error codes that can be thrown on verifyIdentity failure, or set as a part of isAvailable. It consolidates Android and iOS specific Authentication Error codes into one combined error list.

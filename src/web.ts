@@ -5,6 +5,7 @@ import type {
   NativeBiometricPlugin,
   AvailableResult,
   BiometricOptions,
+  IsAvailableOptions,
   GetCredentialOptions,
   SetCredentialOptions,
   DeleteCredentialOptions,
@@ -12,6 +13,12 @@ import type {
   IsCredentialsSavedResult,
   Credentials,
   BiometryChangeListener,
+  DeviceSecurityConfig,
+  VaultKeyResult,
+  IsLockedResult,
+  HasSecureHardwareResult,
+  IsLockedOutResult,
+  IsSystemPasscodeSetResult,
 } from './definitions';
 import { BiometryType, AuthenticationStrength } from './definitions';
 
@@ -22,12 +29,23 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
    * This is NOT secure storage and should only be used for development purposes.
    */
   private credentialStore: Map<string, Credentials> = new Map();
+  private locked = true;
+  private vaultKey: string | null = null;
+  private vaultKeyId: string | null = null;
+  private failedUnlockAttempts = 0;
+  private config: DeviceSecurityConfig = {
+    lockAfterBackgrounded: -1,
+    allowDeviceCredential: false,
+    maxFailedAttempts: -1,
+    invalidateOnBiometryChange: false,
+  };
 
   constructor() {
     super();
   }
 
-  isAvailable(): Promise<AvailableResult> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  isAvailable(_options?: IsAvailableOptions): Promise<AvailableResult> {
     // Web platform: return a dummy implementation for development/testing
     // Using TOUCH_ID as a generic placeholder for simulated biometric authentication
     return Promise.resolve({
@@ -39,14 +57,12 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async addListener(_eventName: 'biometryChange', _listener: BiometryChangeListener): Promise<PluginListenerHandle> {
-    // Web platform: no-op, but return a valid handle
-    return {
-      remove: async () => {
-        // Nothing to remove on web
-      },
-    };
+  async addListener(
+    eventName: 'biometryChange',
+    listener: BiometryChangeListener
+  ): Promise<PluginListenerHandle>;
+  async addListener(eventName: string, listener: (...args: unknown[]) => void): Promise<PluginListenerHandle> {
+    return super.addListener(eventName, listener);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -54,6 +70,59 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
     console.log('verifyIdentity (dummy implementation)');
     // Dummy implementation: always succeeds for browser testing
     return Promise.resolve();
+  }
+
+  async unlock(_options?: BiometricOptions): Promise<void> {
+    console.log('unlock (dummy implementation)');
+    this.locked = false;
+    this.failedUnlockAttempts = 0;
+    if (!this.vaultKey) {
+      const bytes = new Uint8Array(32);
+      crypto.getRandomValues(bytes);
+      this.vaultKey = btoa(String.fromCharCode(...bytes));
+      this.vaultKeyId = crypto.randomUUID();
+    }
+    this.notifyListeners('unlock', {});
+  }
+
+  async lock(): Promise<void> {
+    this.locked = true;
+    this.vaultKey = null;
+    this.vaultKeyId = null;
+    this.notifyListeners('lock', {});
+  }
+
+  async isLocked(): Promise<IsLockedResult> {
+    return { isLocked: this.locked };
+  }
+
+  async updateConfig(config: DeviceSecurityConfig): Promise<void> {
+    this.config = { ...this.config, ...config };
+    this.notifyListeners('configChanged', this.config);
+  }
+
+  async getVaultKey(): Promise<VaultKeyResult> {
+    if (this.locked || !this.vaultKey || !this.vaultKeyId) {
+      throw new Error('LOCKED');
+    }
+    return { key: this.vaultKey, keyId: this.vaultKeyId };
+  }
+
+  async deleteVaultKey(): Promise<void> {
+    this.vaultKey = null;
+    this.vaultKeyId = null;
+  }
+
+  async hasSecureHardware(): Promise<HasSecureHardwareResult> {
+    return { hasSecureHardware: true };
+  }
+
+  async isLockedOutOfBiometrics(): Promise<IsLockedOutResult> {
+    return { isLockedOut: false };
+  }
+
+  async isSystemPasscodeSet(): Promise<IsSystemPasscodeSetResult> {
+    return { isSet: true };
   }
 
   getCredentials(_options: GetCredentialOptions): Promise<Credentials> {

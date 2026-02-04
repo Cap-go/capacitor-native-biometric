@@ -50,16 +50,25 @@ public class AuthActivity extends AppCompatActivity {
         // Since this plugin always provides a cancel button for consistency, we cannot support
         // device credential fallback. Users should use system settings to enroll biometrics instead.
         int[] allowedTypes = getIntent().getIntArrayExtra("allowedBiometryTypes");
+        boolean useDeviceCredential = getIntent().getBooleanExtra("useDeviceCredential", false);
 
-        int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
-        if (allowedTypes != null) {
+        int authenticators;
+        if (useDeviceCredential) {
+            authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG |
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+        } else if (allowedTypes != null) {
             // Filter authenticators based on allowed types
             authenticators = getAllowedAuthenticators(allowedTypes);
+        } else {
+            authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
         }
+
         builder.setAllowedAuthenticators(authenticators);
 
-        String negativeText = getIntent().getStringExtra("negativeButtonText");
-        builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
+        if (!useDeviceCredential) {
+            String negativeText = getIntent().getStringExtra("negativeButtonText");
+            builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
+        }
 
         BiometricPrompt.PromptInfo promptInfo = builder.build();
 

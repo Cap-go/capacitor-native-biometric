@@ -143,6 +143,59 @@ export interface IsCredentialsSavedResult {
   isSaved: boolean;
 }
 
+export interface DeviceSecurityConfig {
+  /**
+   * Auto-lock after the app has been in background for this many milliseconds.
+   * Use -1 to disable (default).
+   */
+  lockAfterBackgrounded?: number;
+  /**
+   * Allow device credential fallback (PIN/pattern/password) where supported.
+   * Default: false.
+   */
+  allowDeviceCredential?: boolean;
+  /**
+   * Maximum number of failed unlock attempts before wiping secure memory.
+   * Use -1 to disable (default).
+   */
+  maxFailedAttempts?: number;
+  /**
+   * Invalidate keys on biometric changes (optional, not enabled by default).
+   */
+  invalidateOnBiometryChange?: boolean;
+}
+
+export interface VaultKeyResult {
+  /**
+   * Base64-encoded key bytes.
+   */
+  key: string;
+  /**
+   * Stable identifier for the key.
+   */
+  keyId: string;
+}
+
+export interface IsLockedResult {
+  isLocked: boolean;
+}
+
+export interface HasSecureHardwareResult {
+  hasSecureHardware: boolean;
+}
+
+export interface IsLockedOutResult {
+  isLockedOut: boolean;
+}
+
+export interface IsSystemPasscodeSetResult {
+  isSet: boolean;
+}
+
+export interface WipeEvent {
+  reason: string;
+}
+
 /**
  * Biometric authentication error codes.
  * These error codes are used in both isAvailable() and verifyIdentity() methods.
@@ -221,6 +274,11 @@ export enum BiometricAuthError {
  * Callback type for biometry change listener
  */
 export type BiometryChangeListener = (result: AvailableResult) => void;
+export type LockListener = () => void;
+export type UnlockListener = () => void;
+export type ErrorListener = (error: { message: string; code?: string }) => void;
+export type ConfigChangeListener = (config: DeviceSecurityConfig) => void;
+export type WipeListener = (event: WipeEvent) => void;
 
 export interface NativeBiometricPlugin {
   /**
@@ -253,6 +311,11 @@ export interface NativeBiometricPlugin {
    * ```
    */
   addListener(eventName: 'biometryChange', listener: BiometryChangeListener): Promise<PluginListenerHandle>;
+  addListener(eventName: 'lock', listener: LockListener): Promise<PluginListenerHandle>;
+  addListener(eventName: 'unlock', listener: UnlockListener): Promise<PluginListenerHandle>;
+  addListener(eventName: 'error', listener: ErrorListener): Promise<PluginListenerHandle>;
+  addListener(eventName: 'configChanged', listener: ConfigChangeListener): Promise<PluginListenerHandle>;
+  addListener(eventName: 'wipe', listener: WipeListener): Promise<PluginListenerHandle>;
   /**
    * Prompts the user to authenticate with biometrics.
    * @param {BiometricOptions} [options]
@@ -261,6 +324,62 @@ export interface NativeBiometricPlugin {
    * @since 1.0.0
    */
   verifyIdentity(options?: BiometricOptions): Promise<void>;
+  /**
+   * Unlocks the secure session using biometrics (and optionally device credentials).
+   * @param {BiometricOptions} [options]
+   * @returns {Promise<void>}
+   * @since 9.0.0
+   */
+  unlock(options?: BiometricOptions): Promise<void>;
+  /**
+   * Locks the secure session and clears secure memory.
+   * @returns {Promise<void>}
+   * @since 9.0.0
+   */
+  lock(): Promise<void>;
+  /**
+   * Returns current lock state.
+   * @returns {Promise<IsLockedResult>}
+   * @since 9.0.0
+   */
+  isLocked(): Promise<IsLockedResult>;
+  /**
+   * Updates device security configuration at runtime.
+   * @param {DeviceSecurityConfig} config
+   * @returns {Promise<void>}
+   * @since 9.0.0
+   */
+  updateConfig(config: DeviceSecurityConfig): Promise<void>;
+  /**
+   * Returns the base64-encoded vault key (only when unlocked).
+   * @returns {Promise<VaultKeyResult>}
+   * @since 9.0.0
+   */
+  getVaultKey(): Promise<VaultKeyResult>;
+  /**
+   * Deletes the stored vault key.
+   * @returns {Promise<void>}
+   * @since 9.0.0
+   */
+  deleteVaultKey(): Promise<void>;
+  /**
+   * Returns whether the device has secure biometric hardware.
+   * @returns {Promise<HasSecureHardwareResult>}
+   * @since 9.0.0
+   */
+  hasSecureHardware(): Promise<HasSecureHardwareResult>;
+  /**
+   * Returns whether biometrics are currently locked out.
+   * @returns {Promise<IsLockedOutResult>}
+   * @since 9.0.0
+   */
+  isLockedOutOfBiometrics(): Promise<IsLockedOutResult>;
+  /**
+   * Returns whether a system passcode/PIN is set.
+   * @returns {Promise<IsSystemPasscodeSetResult>}
+   * @since 9.0.0
+   */
+  isSystemPasscodeSet(): Promise<IsSystemPasscodeSetResult>;
   /**
    * Gets the stored credentials for a given server.
    * @param {GetCredentialOptions} options

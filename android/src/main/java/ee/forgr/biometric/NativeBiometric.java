@@ -40,6 +40,7 @@ import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Objects;
+import java.util.UUID;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
@@ -77,15 +78,46 @@ public class NativeBiometric extends Plugin {
     private static final int GCM_IV_LENGTH = 12;
     private static final String ENCRYPTED_KEY = "NativeBiometricKey";
     private static final String NATIVE_BIOMETRIC_SHARED_PREFERENCES = "NativeBiometricSharedPreferences";
+    private static final String NATIVE_BIOMETRIC_CONFIG_PREFERENCES = "NativeBiometricConfig";
+    private static final String NATIVE_BIOMETRIC_VAULT_PREFERENCES = "NativeBiometricVault";
+    private static final String VAULT_KEY_PREF = "vaultKey";
+    private static final String VAULT_KEY_ID_PREF = "vaultKeyId";
+    private static final String VAULT_KEY_ALIAS = "NativeBiometricVaultKeyAlias";
+
+    private boolean isLocked = true;
+    private long lockAfterBackgrounded = -1;
+    private boolean allowDeviceCredential = false;
+    private int maxFailedAttempts = -1;
+    private boolean invalidateOnBiometryChange = false;
+    private int failedUnlockAttempts = 0;
+    private long backgroundedAt = -1;
+    private String cachedVaultKey = null;
+    private String cachedVaultKeyId = null;
 
     private SharedPreferences encryptedSharedPreferences;
 
     @Override
+    public void load() {
+        super.load();
+        loadConfig();
+    }
+
+    @Override
     protected void handleOnResume() {
         super.handleOnResume();
+        handleBackgroundAutoLock();
         // Notify listeners when app resumes from background
         JSObject result = checkBiometryAvailability(false);
         notifyListeners("biometryChange", result);
+    }
+
+    @Override
+    protected void handleOnPause() {
+        super.handleOnPause();
+        backgroundedAt = System.currentTimeMillis();
+        if (lockAfterBackgrounded == 0) {
+            lockInternal(true);
+        }
     }
 
     /**
@@ -244,6 +276,134 @@ public class NativeBiometric extends Plugin {
     }
 
     @PluginMethod
+    public void unlock(final PluginCall call) throws JSONException {
+        Intent intent = new Intent(getContext(), AuthActivity.class);
+        intent.putExtra("title", call.getString("title", "Authenticate"));
+
+        String subtitle = call.getString("subtitle");
+        if (subtitle != null) {
+            intent.putExtra("subtitle", subtitle);
+        }
+
+        String description = call.getString("description");
+        if (description != null) {
+            intent.putExtra("description", description);
+        }
+
+        String negativeButtonText = call.getString("negativeButtonText");
+        if (negativeButtonText != null) {
+            intent.putExtra("negativeButtonText", negativeButtonText);
+        }
+
+        boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));
+        boolean useDeviceCredential = allowDeviceCredential || useFallback;
+        intent.putExtra("useDeviceCredential", useDeviceCredential);
+
+        startActivityForResult(call, intent, "unlockResult");
+    }
+
+    @PluginMethod
+    public void lock(final PluginCall call) {
+        lockInternal(true);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void isLocked(final PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("isLocked", isLocked);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void updateConfig(final PluginCall call) {
+        if (call.hasOption("lockAfterBackgrounded")) {
+            Double value = call.getDouble("lockAfterBackgrounded", -1D);
+            lockAfterBackgrounded = value == null ? -1L : value.longValue();
+        }
+        if (call.hasOption("allowDeviceCredential")) {
+            allowDeviceCredential = Boolean.TRUE.equals(call.getBoolean("allowDeviceCredential", false));
+        }
+        if (call.hasOption("maxFailedAttempts")) {
+            maxFailedAttempts = call.getInt("maxFailedAttempts", -1);
+        }
+        if (call.hasOption("invalidateOnBiometryChange")) {
+            invalidateOnBiometryChange = Boolean.TRUE.equals(call.getBoolean("invalidateOnBiometryChange", false));
+        }
+        persistConfig();
+        notifyListeners("configChanged", serializeConfig());
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getVaultKey(final PluginCall call) {
+        if (isLocked) {
+            call.reject("LOCKED");
+            return;
+        }
+        try {
+            ensureVaultKeyCached();
+            if (cachedVaultKey == null || cachedVaultKeyId == null) {
+                call.reject("NO_VAULT_KEY");
+                return;
+            }
+            JSObject ret = new JSObject();
+            ret.put("key", cachedVaultKey);
+            ret.put("keyId", cachedVaultKeyId);
+            call.resolve(ret);
+        } catch (GeneralSecurityException | IOException e) {
+            call.reject("Failed to load vault key", e);
+        }
+    }
+
+    @PluginMethod
+    public void deleteVaultKey(final PluginCall call) {
+        try {
+            getKeyStore().deleteEntry(VAULT_KEY_ALIAS);
+        } catch (KeyStoreException | CertificateException | NoSuchAlgorithmException | IOException e) {
+            call.reject("Failed to delete vault key", e);
+            return;
+        }
+        SharedPreferences prefs = getContext().getSharedPreferences(NATIVE_BIOMETRIC_VAULT_PREFERENCES, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.remove(VAULT_KEY_PREF);
+        editor.remove(VAULT_KEY_ID_PREF);
+        editor.apply();
+        cachedVaultKey = null;
+        cachedVaultKeyId = null;
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void hasSecureHardware(final PluginCall call) {
+        PackageManager pm = getContext().getPackageManager();
+        boolean hasHardware =
+            pm.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT) ||
+            pm.hasSystemFeature(PackageManager.FEATURE_FACE) ||
+            pm.hasSystemFeature(PackageManager.FEATURE_IRIS);
+        JSObject ret = new JSObject();
+        ret.put("hasSecureHardware", hasHardware);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void isLockedOutOfBiometrics(final PluginCall call) {
+        BiometricManager biometricManager = BiometricManager.from(getContext());
+        int result = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG);
+        boolean lockedOut = result == BiometricManager.BIOMETRIC_ERROR_LOCKOUT || result == BiometricManager.BIOMETRIC_ERROR_LOCKOUT_PERMANENT;
+        JSObject ret = new JSObject();
+        ret.put("isLockedOut", lockedOut);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void isSystemPasscodeSet(final PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("isSet", deviceHasCredentials());
+        call.resolve(ret);
+    }
+
+    @PluginMethod
     public void setCredentials(final PluginCall call) {
         String username = call.getString("username", null);
         String password = call.getString("password", null);
@@ -315,6 +475,42 @@ public class NativeBiometric extends Plugin {
             }
         } else {
             call.reject("Something went wrong.");
+        }
+    }
+
+    @ActivityCallback
+    private void unlockResult(PluginCall call, ActivityResult result) {
+        if (result.getResultCode() == Activity.RESULT_OK) {
+            Intent data = result.getData();
+            if (data != null && data.hasExtra("result")) {
+                switch (Objects.requireNonNull(data.getStringExtra("result"))) {
+                    case "success":
+                        try {
+                            isLocked = false;
+                            failedUnlockAttempts = 0;
+                            ensureVaultKeyCached();
+                            notifyListeners("unlock", new JSObject());
+                            call.resolve();
+                        } catch (GeneralSecurityException | IOException e) {
+                            lockInternal(false);
+                            call.reject("Failed to unlock", e);
+                        }
+                        break;
+                    case "failed":
+                    case "error":
+                        handleUnlockFailure(
+                            call,
+                            data.getStringExtra("errorDetails"),
+                            data.getStringExtra("errorCode")
+                        );
+                        break;
+                    default:
+                        call.reject("Something went wrong.");
+                        break;
+                }
+            }
+        } else {
+            handleUnlockFailure(call, "Authentication canceled", null);
         }
     }
 
@@ -564,6 +760,103 @@ public class NativeBiometric extends Plugin {
         KeyguardManager keyguardManager = (KeyguardManager) getActivity().getSystemService(Context.KEYGUARD_SERVICE);
         // Can only use fallback if the device has a pin/pattern/password lockscreen.
         return keyguardManager.isDeviceSecure();
+    }
+
+    private void loadConfig() {
+        SharedPreferences prefs = getContext().getSharedPreferences(NATIVE_BIOMETRIC_CONFIG_PREFERENCES, Context.MODE_PRIVATE);
+        lockAfterBackgrounded = prefs.getLong("lockAfterBackgrounded", -1L);
+        allowDeviceCredential = prefs.getBoolean("allowDeviceCredential", false);
+        maxFailedAttempts = prefs.getInt("maxFailedAttempts", -1);
+        invalidateOnBiometryChange = prefs.getBoolean("invalidateOnBiometryChange", false);
+    }
+
+    private void persistConfig() {
+        SharedPreferences prefs = getContext().getSharedPreferences(NATIVE_BIOMETRIC_CONFIG_PREFERENCES, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putLong("lockAfterBackgrounded", lockAfterBackgrounded);
+        editor.putBoolean("allowDeviceCredential", allowDeviceCredential);
+        editor.putInt("maxFailedAttempts", maxFailedAttempts);
+        editor.putBoolean("invalidateOnBiometryChange", invalidateOnBiometryChange);
+        editor.apply();
+    }
+
+    private JSObject serializeConfig() {
+        JSObject obj = new JSObject();
+        obj.put("lockAfterBackgrounded", lockAfterBackgrounded);
+        obj.put("allowDeviceCredential", allowDeviceCredential);
+        obj.put("maxFailedAttempts", maxFailedAttempts);
+        obj.put("invalidateOnBiometryChange", invalidateOnBiometryChange);
+        return obj;
+    }
+
+    private void handleBackgroundAutoLock() {
+        if (backgroundedAt <= 0 || lockAfterBackgrounded < 0) {
+            backgroundedAt = -1;
+            return;
+        }
+        long elapsed = System.currentTimeMillis() - backgroundedAt;
+        if (elapsed >= lockAfterBackgrounded) {
+            lockInternal(true);
+        }
+        backgroundedAt = -1;
+    }
+
+    private void lockInternal(boolean notify) {
+        isLocked = true;
+        cachedVaultKey = null;
+        cachedVaultKeyId = null;
+        if (notify) {
+            notifyListeners("lock", new JSObject());
+        }
+    }
+
+    private void handleUnlockFailure(PluginCall call, String errorDetails, String errorCode) {
+        failedUnlockAttempts++;
+        JSObject error = new JSObject();
+        if (errorDetails != null) {
+            error.put("message", errorDetails);
+        }
+        if (errorCode != null) {
+            error.put("code", errorCode);
+        }
+        notifyListeners("error", error);
+        if (maxFailedAttempts > 0 && failedUnlockAttempts >= maxFailedAttempts) {
+            lockInternal(true);
+            failedUnlockAttempts = 0;
+            JSObject wipe = new JSObject();
+            wipe.put("reason", "maxFailedAttempts");
+            notifyListeners("wipe", wipe);
+        }
+        if (errorCode != null) {
+            call.reject(errorDetails != null ? errorDetails : "Authentication failed", errorCode);
+        } else {
+            call.reject(errorDetails != null ? errorDetails : "Authentication failed");
+        }
+    }
+
+    private void ensureVaultKeyCached() throws GeneralSecurityException, IOException {
+        if (cachedVaultKey != null && cachedVaultKeyId != null) {
+            return;
+        }
+        SharedPreferences prefs = getContext().getSharedPreferences(NATIVE_BIOMETRIC_VAULT_PREFERENCES, Context.MODE_PRIVATE);
+        String encryptedKey = prefs.getString(VAULT_KEY_PREF, null);
+        String keyId = prefs.getString(VAULT_KEY_ID_PREF, null);
+        if (encryptedKey == null || keyId == null) {
+            byte[] rawKey = new byte[32];
+            new SecureRandom().nextBytes(rawKey);
+            String keyB64 = Base64.encodeToString(rawKey, Base64.NO_WRAP);
+            String encrypted = encryptString(keyB64, VAULT_KEY_ALIAS);
+            String newKeyId = UUID.randomUUID().toString();
+            SharedPreferences.Editor editor = prefs.edit();
+            editor.putString(VAULT_KEY_PREF, encrypted);
+            editor.putString(VAULT_KEY_ID_PREF, newKeyId);
+            editor.apply();
+            cachedVaultKey = keyB64;
+            cachedVaultKeyId = newKeyId;
+            return;
+        }
+        cachedVaultKey = decryptString(encryptedKey, VAULT_KEY_ALIAS);
+        cachedVaultKeyId = keyId;
     }
 
     /**

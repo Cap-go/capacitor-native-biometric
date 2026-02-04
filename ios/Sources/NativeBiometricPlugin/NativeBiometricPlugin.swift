@@ -17,6 +17,15 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "isAvailable", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "verifyIdentity", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "unlock", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "lock", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "isLocked", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "updateConfig", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getVaultKey", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "deleteVaultKey", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "hasSecureHardware", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "isLockedOutOfBiometrics", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "isSystemPasscodeSet", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getCredentials", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setCredentials", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "deleteCredentials", returnType: CAPPluginReturnPromise),
@@ -24,11 +33,32 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
     ]
 
+    private var isLocked = true
+    private var failedUnlockAttempts = 0
+    private var lockAfterBackgrounded: Double = -1
+    private var allowDeviceCredential = false
+    private var maxFailedAttempts = -1
+    private var invalidateOnBiometryChange = false
+    private var backgroundedAt: Date?
+    private var cachedVaultKey: Data?
+    private var cachedVaultKeyId: String?
+    private let vaultKeyService = "NativeBiometricVaultKey"
+    private let vaultKeyAccount = "default"
+    private let vaultKeyIdDefaultsKey = "NativeBiometricVaultKeyId"
+    private let configDefaultsKey = "NativeBiometricConfig"
+
     override public func load() {
+        loadConfig()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleAppDidBecomeActive),
             name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
             object: nil
         )
     }
@@ -38,9 +68,17 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc private func handleAppDidBecomeActive() {
+        handleBackgroundAutoLock()
         // Notify listeners when app becomes active (resumes from background)
         let result = checkBiometryAvailability(useFallback: false)
         notifyListeners("biometryChange", data: result)
+    }
+
+    @objc private func handleAppDidEnterBackground() {
+        backgroundedAt = Date()
+        if lockAfterBackgrounded == 0 {
+            lockInternal(notify: true)
+        }
     }
 
     private func checkBiometryAvailability(useFallback: Bool) -> JSObject {
@@ -165,6 +203,150 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         } else {
             call.reject("Authentication not available")
         }
+    }
+
+    @objc func unlock(_ call: CAPPluginCall) {
+        let context = LAContext()
+        var canEvaluateError: NSError?
+
+        let useFallback = call.getBool("useFallback", false) || allowDeviceCredential
+        context.localizedFallbackTitle = ""
+
+        if useFallback {
+            context.localizedFallbackTitle = nil
+            if let fallbackTitle = call.getString("fallbackTitle") {
+                context.localizedFallbackTitle = fallbackTitle
+            }
+        }
+
+        let policy = useFallback ? LAPolicy.deviceOwnerAuthentication : LAPolicy.deviceOwnerAuthenticationWithBiometrics
+
+        if context.canEvaluatePolicy(policy, error: &canEvaluateError) {
+            let reason = call.getString("reason") ?? "Authenticate"
+
+            context.evaluatePolicy(policy, localizedReason: reason) { (success, evaluateError) in
+                DispatchQueue.main.async {
+                    if success {
+                        self.isLocked = false
+                        self.failedUnlockAttempts = 0
+                        do {
+                            try self.ensureVaultKeyCached()
+                            self.notifyListeners("unlock", data: [:])
+                            call.resolve()
+                        } catch {
+                            self.lockInternal(notify: false)
+                            call.reject("Failed to unlock", nil, error)
+                        }
+                    } else {
+                        let code = (evaluateError as NSError?)?._code
+                        let message = evaluateError?.localizedDescription ?? "Authentication failed"
+                        self.handleUnlockFailure(message: message, code: code)
+                        call.reject(message, code?.description, evaluateError as NSError?)
+                    }
+                }
+            }
+        } else {
+            call.reject("Authentication not available")
+        }
+    }
+
+    @objc func lock(_ call: CAPPluginCall) {
+        lockInternal(notify: true)
+        call.resolve()
+    }
+
+    @objc func isLocked(_ call: CAPPluginCall) {
+        call.resolve(["isLocked": isLocked])
+    }
+
+    @objc func updateConfig(_ call: CAPPluginCall) {
+        if let value = call.getDouble("lockAfterBackgrounded") {
+            lockAfterBackgrounded = value
+        }
+        if call.hasOption("allowDeviceCredential") {
+            allowDeviceCredential = call.getBool("allowDeviceCredential", false)
+        }
+        if let value = call.getInt("maxFailedAttempts") {
+            maxFailedAttempts = value
+        }
+        if call.hasOption("invalidateOnBiometryChange") {
+            invalidateOnBiometryChange = call.getBool("invalidateOnBiometryChange", false)
+        }
+        persistConfig()
+        notifyListeners("configChanged", data: serializeConfig())
+        call.resolve()
+    }
+
+    @objc func getVaultKey(_ call: CAPPluginCall) {
+        if isLocked {
+            call.reject("LOCKED")
+            return
+        }
+        do {
+            try ensureVaultKeyCached()
+            guard let key = cachedVaultKey, let keyId = cachedVaultKeyId else {
+                call.reject("NO_VAULT_KEY")
+                return
+            }
+            call.resolve([
+                "key": key.base64EncodedString(),
+                "keyId": keyId
+            ])
+        } catch {
+            call.reject("Failed to load vault key", nil, error)
+        }
+    }
+
+    @objc func deleteVaultKey(_ call: CAPPluginCall) {
+        do {
+            try deleteVaultKeyFromKeychain()
+            UserDefaults.standard.removeObject(forKey: vaultKeyIdDefaultsKey)
+            cachedVaultKey = nil
+            cachedVaultKeyId = nil
+            call.resolve()
+        } catch {
+            call.reject(error.localizedDescription)
+        }
+    }
+
+    @objc func hasSecureHardware(_ call: CAPPluginCall) {
+        let context = LAContext()
+        var error: NSError?
+        let hasBiometrics = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+        if hasBiometrics {
+            call.resolve(["hasSecureHardware": true])
+            return
+        }
+        if let authError = error {
+            let code = authError.code
+            let hasHardware = code == LAError.biometryNotEnrolled.rawValue || code == LAError.biometryLockout.rawValue
+            call.resolve(["hasSecureHardware": hasHardware])
+            return
+        }
+        call.resolve(["hasSecureHardware": false])
+    }
+
+    @objc func isLockedOutOfBiometrics(_ call: CAPPluginCall) {
+        let context = LAContext()
+        var error: NSError?
+        _ = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+        let lockedOut = error?.code == LAError.biometryLockout.rawValue
+        call.resolve(["isLockedOut": lockedOut])
+    }
+
+    @objc func isSystemPasscodeSet(_ call: CAPPluginCall) {
+        let context = LAContext()
+        var error: NSError?
+        let canEvaluate = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error)
+        if canEvaluate {
+            call.resolve(["isSet": true])
+            return
+        }
+        if let authError = error, authError.code == LAError.passcodeNotSet.rawValue {
+            call.resolve(["isSet": false])
+            return
+        }
+        call.resolve(["isSet": true])
     }
 
     @objc func getCredentials(_ call: CAPPluginCall) {
@@ -353,6 +535,142 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
 
         default:
             return 0
+        }
+    }
+
+    private func loadConfig() {
+        if let config = UserDefaults.standard.dictionary(forKey: configDefaultsKey) {
+            lockAfterBackgrounded = config["lockAfterBackgrounded"] as? Double ?? -1
+            allowDeviceCredential = config["allowDeviceCredential"] as? Bool ?? false
+            maxFailedAttempts = config["maxFailedAttempts"] as? Int ?? -1
+            invalidateOnBiometryChange = config["invalidateOnBiometryChange"] as? Bool ?? false
+        }
+    }
+
+    private func persistConfig() {
+        UserDefaults.standard.set(serializeConfig(), forKey: configDefaultsKey)
+    }
+
+    private func serializeConfig() -> JSObject {
+        return [
+            "lockAfterBackgrounded": lockAfterBackgrounded,
+            "allowDeviceCredential": allowDeviceCredential,
+            "maxFailedAttempts": maxFailedAttempts,
+            "invalidateOnBiometryChange": invalidateOnBiometryChange
+        ]
+    }
+
+    private func handleBackgroundAutoLock() {
+        guard let backgroundedAt = backgroundedAt, lockAfterBackgrounded >= 0 else {
+            self.backgroundedAt = nil
+            return
+        }
+        let elapsed = Date().timeIntervalSince(backgroundedAt) * 1000
+        if elapsed >= lockAfterBackgrounded {
+            lockInternal(notify: true)
+        }
+        self.backgroundedAt = nil
+    }
+
+    private func lockInternal(notify: Bool) {
+        isLocked = true
+        cachedVaultKey = nil
+        cachedVaultKeyId = nil
+        if notify {
+            notifyListeners("lock", data: [:])
+        }
+    }
+
+    private func handleUnlockFailure(message: String, code: Int?) {
+        failedUnlockAttempts += 1
+        var errorObj: JSObject = ["message": message]
+        if let code = code {
+            errorObj["code"] = String(code)
+        }
+        notifyListeners("error", data: errorObj)
+        if maxFailedAttempts > 0 && failedUnlockAttempts >= maxFailedAttempts {
+            lockInternal(notify: true)
+            failedUnlockAttempts = 0
+            notifyListeners("wipe", data: ["reason": "maxFailedAttempts"])
+        }
+    }
+
+    private func ensureVaultKeyCached() throws {
+        if cachedVaultKey != nil && cachedVaultKeyId != nil {
+            return
+        }
+        let keyData: Data
+        do {
+            keyData = try getVaultKeyFromKeychain()
+        } catch KeychainError.noPassword {
+            var data = Data(count: 32)
+            _ = data.withUnsafeMutableBytes { bytes in
+                SecRandomCopyBytes(kSecRandomDefault, 32, bytes.baseAddress!)
+            }
+            try upsertVaultKeyInKeychain(data)
+            keyData = data
+        }
+
+        cachedVaultKey = keyData
+        if let existingId = UserDefaults.standard.string(forKey: vaultKeyIdDefaultsKey) {
+            cachedVaultKeyId = existingId
+        } else {
+            let newId = UUID().uuidString
+            UserDefaults.standard.set(newId, forKey: vaultKeyIdDefaultsKey)
+            cachedVaultKeyId = newId
+        }
+    }
+
+    private func getVaultKeyFromKeychain() throws -> Data {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: vaultKeyService,
+            kSecAttrAccount as String: vaultKeyAccount,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnData as String: true
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status != errSecItemNotFound else { throw KeychainError.noPassword }
+        guard status == errSecSuccess else { throw KeychainError.unhandledError(status: status) }
+        guard let data = item as? Data else { throw KeychainError.unexpectedPasswordData }
+        return data
+    }
+
+    private func upsertVaultKeyInKeychain(_ data: Data) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: vaultKeyService,
+            kSecAttrAccount as String: vaultKeyAccount
+        ]
+
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+            guard addStatus == errSecSuccess else { throw KeychainError.unhandledError(status: addStatus) }
+            return
+        }
+        guard status == errSecSuccess else { throw KeychainError.unhandledError(status: status) }
+    }
+
+    private func deleteVaultKeyFromKeychain() throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: vaultKeyService,
+            kSecAttrAccount as String: vaultKeyAccount
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError.unhandledError(status: status)
         }
     }
 
