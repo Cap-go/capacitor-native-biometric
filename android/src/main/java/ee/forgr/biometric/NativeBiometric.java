@@ -109,17 +109,18 @@ public class NativeBiometric extends Plugin {
 
         // Check if device has credentials (PIN/pattern/password)
         boolean deviceIsSecure = this.deviceHasCredentials();
-        boolean fallbackAvailable = useFallback && deviceIsSecure;
 
         // On some devices, very weak biometric methods (like certain face authentication implementations)
-        // may not meet BIOMETRIC_WEAK standards but can still be used with DEVICE_CREDENTIAL.
+        // may not meet BIOMETRIC_WEAK standards on their own but can still be used with DEVICE_CREDENTIAL.
         // Check for this combination when useFallback is true to detect these edge cases.
-        int combinedResult = BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE;
+        // Note: The combined check (BIOMETRIC_WEAK | DEVICE_CREDENTIAL) will succeed if EITHER is available.
         boolean hasCombinedAuth = false;
-        if (useFallback && deviceIsSecure) {
+        if (useFallback && deviceIsSecure && !hasWeakBiometric) {
+            // Only check combined authenticator if weak biometric alone is not sufficient
+            // This helps detect very weak biometrics that only work with device credentials
             int combinedAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK | 
                                         BiometricManager.Authenticators.DEVICE_CREDENTIAL;
-            combinedResult = biometricManager.canAuthenticate(combinedAuthenticators);
+            int combinedResult = biometricManager.canAuthenticate(combinedAuthenticators);
             hasCombinedAuth = (combinedResult == BiometricManager.BIOMETRIC_SUCCESS);
         }
 
@@ -146,10 +147,7 @@ public class NativeBiometric extends Plugin {
         } else if (hasCombinedAuth) {
             // Combined auth (weak biometric + device credential) is available
             // This catches edge cases where face auth doesn't meet BIOMETRIC_WEAK standards alone
-            authenticationStrength = AUTH_STRENGTH_WEAK;
-            isAvailable = true;
-        } else if (fallbackAvailable) {
-            // Only device credentials available (no biometrics at all)
+            // or where only device credentials are available (when useFallback=true)
             authenticationStrength = AUTH_STRENGTH_WEAK;
             isAvailable = true;
         }
