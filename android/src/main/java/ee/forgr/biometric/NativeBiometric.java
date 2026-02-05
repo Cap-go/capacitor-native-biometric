@@ -111,13 +111,14 @@ public class NativeBiometric extends Plugin {
         boolean deviceIsSecure = this.deviceHasCredentials();
 
         // On some devices, very weak biometric methods (like certain face authentication implementations)
-        // may not meet BIOMETRIC_WEAK standards on their own but can still be used with DEVICE_CREDENTIAL.
-        // Check for this combination when useFallback is true to detect these edge cases.
-        // Note: The combined check (BIOMETRIC_WEAK | DEVICE_CREDENTIAL) will succeed if EITHER is available.
+        // may not meet BIOMETRIC_WEAK standards on their own. When useFallback is true, check if
+        // authentication is available using the combined BIOMETRIC_WEAK | DEVICE_CREDENTIAL authenticator.
+        // Note: This combined check succeeds if weak biometrics OR device credentials (PIN/pattern/password)
+        // are available, providing a more lenient authentication availability check.
         boolean hasCombinedAuth = false;
         if (useFallback && deviceIsSecure && !hasWeakBiometric) {
             // Only check combined authenticator if weak biometric alone is not sufficient
-            // This helps detect very weak biometrics that only work with device credentials
+            // This provides device credential fallback and may detect very weak biometrics
             int combinedAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK | 
                                         BiometricManager.Authenticators.DEVICE_CREDENTIAL;
             int combinedResult = biometricManager.canAuthenticate(combinedAuthenticators);
@@ -145,9 +146,8 @@ public class NativeBiometric extends Plugin {
             authenticationStrength = AUTH_STRENGTH_WEAK;
             isAvailable = true;
         } else if (hasCombinedAuth) {
-            // Combined auth (weak biometric + device credential) is available
-            // This catches edge cases where face auth doesn't meet BIOMETRIC_WEAK standards alone
-            // or where only device credentials are available (when useFallback=true)
+            // Combined authentication is available (weak biometric and/or device credential)
+            // This allows authentication via device credentials as fallback when useFallback=true
             authenticationStrength = AUTH_STRENGTH_WEAK;
             isAvailable = true;
         }
