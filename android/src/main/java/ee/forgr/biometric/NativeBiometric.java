@@ -111,6 +111,18 @@ public class NativeBiometric extends Plugin {
         boolean deviceIsSecure = this.deviceHasCredentials();
         boolean fallbackAvailable = useFallback && deviceIsSecure;
 
+        // On some devices, very weak biometric methods (like certain face authentication implementations)
+        // may not meet BIOMETRIC_WEAK standards but can still be used with DEVICE_CREDENTIAL.
+        // Check for this combination when useFallback is true to detect these edge cases.
+        int combinedResult = BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE;
+        boolean hasCombinedAuth = false;
+        if (useFallback && deviceIsSecure) {
+            int combinedAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK | 
+                                        BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+            combinedResult = biometricManager.canAuthenticate(combinedAuthenticators);
+            hasCombinedAuth = (combinedResult == BiometricManager.BIOMETRIC_SUCCESS);
+        }
+
         // Determine biometry type
         int biometryType = detectBiometryType(biometricManager);
         ret.put("biometryType", biometryType);
@@ -131,7 +143,13 @@ public class NativeBiometric extends Plugin {
         } else if (hasWeakBiometric) {
             authenticationStrength = AUTH_STRENGTH_WEAK;
             isAvailable = true;
+        } else if (hasCombinedAuth) {
+            // Combined auth (weak biometric + device credential) is available
+            // This catches edge cases where face auth doesn't meet BIOMETRIC_WEAK standards alone
+            authenticationStrength = AUTH_STRENGTH_WEAK;
+            isAvailable = true;
         } else if (fallbackAvailable) {
+            // Only device credentials available (no biometrics at all)
             authenticationStrength = AUTH_STRENGTH_WEAK;
             isAvailable = true;
         }
@@ -139,10 +157,12 @@ public class NativeBiometric extends Plugin {
         // Handle error codes when authentication is not available
         if (!isAvailable) {
             int biometricManagerErrorCode;
-            if (strongResult != BiometricManager.BIOMETRIC_SUCCESS) {
-                biometricManagerErrorCode = strongResult;
-            } else if (weakResult != BiometricManager.BIOMETRIC_SUCCESS) {
+            // Prioritize weak result over strong result to give more accurate error
+            // (e.g., if weak biometric is enrolled but not strong, we want to report that)
+            if (weakResult != BiometricManager.BIOMETRIC_SUCCESS) {
                 biometricManagerErrorCode = weakResult;
+            } else if (strongResult != BiometricManager.BIOMETRIC_SUCCESS) {
+                biometricManagerErrorCode = strongResult;
             } else {
                 biometricManagerErrorCode = BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE;
             }
