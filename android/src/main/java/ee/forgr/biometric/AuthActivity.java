@@ -76,6 +76,8 @@ public class AuthActivity extends AppCompatActivity {
 
         // Only set negative button text if DEVICE_CREDENTIAL is not being used
         // setNegativeButtonText() and DEVICE_CREDENTIAL are mutually exclusive
+        // Note: On API 28-29, DEVICE_CREDENTIAL is never added to authenticators (see getAllowedAuthenticators),
+        // so setNegativeButtonText() will always be called on those API levels
         boolean hasDeviceCredential = (authenticators & BiometricManager.Authenticators.DEVICE_CREDENTIAL) != 0;
         if (!hasDeviceCredential) {
             String negativeText = getIntent().getStringExtra("negativeButtonText");
