@@ -64,8 +64,7 @@ public class AuthActivity extends AppCompatActivity {
         // Note: useFallback parameter is ignored on Android (iOS-only feature)
         // Android's BiometricPrompt API has a constraint: when DEVICE_CREDENTIAL authenticator is used,
         // setNegativeButtonText() cannot be called (it will throw IllegalArgumentException).
-        // Since this plugin always provides a cancel button for consistency, we cannot support
-        // device credential fallback. Users should use system settings to enroll biometrics instead.
+        // Additionally, DEVICE_CREDENTIAL combined with BIOMETRIC_STRONG is only supported on API 30+.
         int[] allowedTypes = getIntent().getIntArrayExtra("allowedBiometryTypes");
 
         int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
@@ -75,8 +74,13 @@ public class AuthActivity extends AppCompatActivity {
         }
         builder.setAllowedAuthenticators(authenticators);
 
-        String negativeText = getIntent().getStringExtra("negativeButtonText");
-        builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
+        // Only set negative button text if DEVICE_CREDENTIAL is not being used
+        // setNegativeButtonText() and DEVICE_CREDENTIAL are mutually exclusive
+        boolean hasDeviceCredential = (authenticators & BiometricManager.Authenticators.DEVICE_CREDENTIAL) != 0;
+        if (!hasDeviceCredential) {
+            String negativeText = getIntent().getStringExtra("negativeButtonText");
+            builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
+        }
 
         BiometricPrompt.PromptInfo promptInfo = builder.build();
 
@@ -286,7 +290,11 @@ public class AuthActivity extends AppCompatActivity {
                     authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
                     break;
                 case 7: // DEVICE_CREDENTIAL (PIN, pattern, or password)
-                    authenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+                    // DEVICE_CREDENTIAL is only supported on API 30+ (Android 11+)
+                    // On API 28-29, the combination BIOMETRIC_STRONG | DEVICE_CREDENTIAL is unsupported
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        authenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+                    }
                     break;
             }
         }
