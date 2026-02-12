@@ -21,34 +21,23 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
-import java.security.SecureRandom;
 import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
-import java.util.ArrayList;
 import javax.crypto.Cipher;
-import javax.crypto.CipherInputStream;
-import javax.crypto.CipherOutputStream;
 import javax.crypto.KeyGenerator;
-import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 
 @CapacitorPlugin(name = "NativeBiometric")
 public class NativeBiometric extends Plugin {
-
-  //protected final static int AUTH_CODE = 0102;
 
   private static final int NONE = 0;
   private static final int FINGERPRINT = 3;
@@ -59,14 +48,10 @@ public class NativeBiometric extends Plugin {
   private KeyStore keyStore;
   private static final String ANDROID_KEY_STORE = "AndroidKeyStore";
   private static final String TRANSFORMATION = "AES/GCM/NoPadding";
-  private static final String RSA_MODE = "RSA/ECB/PKCS1Padding";
-  private static final String AES_MODE = "AES/ECB/PKCS7Padding";
-  private static final byte[] FIXED_IV = new byte[12];
-  private static final String ENCRYPTED_KEY = "NativeBiometricKey";
+  private static final int GCM_IV_LENGTH = 12;
+  private static final byte[] LEGACY_FIXED_IV = new byte[GCM_IV_LENGTH];
   private static final String NATIVE_BIOMETRIC_SHARED_PREFERENCES =
     "NativeBiometricSharedPreferences";
-
-  private SharedPreferences encryptedSharedPreferences;
 
   private int getAvailableFeature() {
     // default to none
@@ -117,7 +102,7 @@ public class NativeBiometric extends Plugin {
     );
 
     boolean isWeakAuthenticatorAllowed = Boolean.TRUE.equals(
-            call.getBoolean("isWeakAuthenticatorAllowed", false)
+      call.getBoolean("isWeakAuthenticatorAllowed", false)
     );
 
     int allowedAuthenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
@@ -137,7 +122,7 @@ public class NativeBiometric extends Plugin {
     boolean isAvailable =
       (
         canAuthenticateResult == BiometricManager.BIOMETRIC_SUCCESS ||
-        fallbackAvailable
+          fallbackAvailable
       );
     ret.put("isAvailable", isAvailable);
 
@@ -382,40 +367,39 @@ public class NativeBiometric extends Plugin {
 
   private String encryptString(String stringToEncrypt, String KEY_ALIAS)
     throws GeneralSecurityException, IOException {
-    Cipher cipher;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      cipher = Cipher.getInstance(TRANSFORMATION);
-      cipher.init(
-        Cipher.ENCRYPT_MODE,
-        getKey(KEY_ALIAS),
-        new GCMParameterSpec(128, FIXED_IV)
-      );
-    } else {
-      cipher = Cipher.getInstance(AES_MODE, "BC");
-      cipher.init(Cipher.ENCRYPT_MODE, getKey(KEY_ALIAS));
-    }
-    byte[] encodedBytes = cipher.doFinal(stringToEncrypt.getBytes("UTF-8"));
-    return Base64.encodeToString(encodedBytes, Base64.DEFAULT);
+    Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+    cipher.init(Cipher.ENCRYPT_MODE, getKey(KEY_ALIAS));
+    byte[] iv = cipher.getIV();
+    byte[] ciphertext = cipher.doFinal(stringToEncrypt.getBytes("UTF-8"));
+    byte[] combined = new byte[iv.length + ciphertext.length];
+    System.arraycopy(iv, 0, combined, 0, iv.length);
+    System.arraycopy(ciphertext, 0, combined, iv.length, ciphertext.length);
+    return Base64.encodeToString(combined, Base64.DEFAULT);
   }
 
   private String decryptString(String stringToDecrypt, String KEY_ALIAS)
     throws GeneralSecurityException, IOException {
-    byte[] encryptedData = Base64.decode(stringToDecrypt, Base64.DEFAULT);
+    byte[] data = Base64.decode(stringToDecrypt, Base64.DEFAULT);
 
-    Cipher cipher;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      cipher = Cipher.getInstance(TRANSFORMATION);
-      cipher.init(
-        Cipher.DECRYPT_MODE,
-        getKey(KEY_ALIAS),
-        new GCMParameterSpec(128, FIXED_IV)
-      );
-    } else {
-      cipher = Cipher.getInstance(AES_MODE, "BC");
-      cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS));
+    // Try new format first: iv(12) || ciphertext+tag
+    if (data.length > GCM_IV_LENGTH) {
+      try {
+        byte[] iv = new byte[GCM_IV_LENGTH];
+        System.arraycopy(data, 0, iv, 0, GCM_IV_LENGTH);
+        byte[] ciphertext = new byte[data.length - GCM_IV_LENGTH];
+        System.arraycopy(data, GCM_IV_LENGTH, ciphertext, 0, ciphertext.length);
+
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, iv));
+        return new String(cipher.doFinal(ciphertext), "UTF-8");
+      } catch (GeneralSecurityException e) {
+        // Fall through to legacy format
+      }
     }
-    byte[] decryptedData = cipher.doFinal(encryptedData);
-    return new String(decryptedData, "UTF-8");
+    // Legacy format: fixed zero IV, no IV prefix
+    Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+    cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, LEGACY_FIXED_IV));
+    return new String(cipher.doFinal(data), "UTF-8");
   }
 
   @SuppressLint("NewAPI") // API level is already checked
@@ -432,32 +416,28 @@ public class NativeBiometric extends Plugin {
 
   private Key generateKey(String KEY_ALIAS, boolean isStrongBoxBacked)
     throws GeneralSecurityException, IOException, StrongBoxUnavailableException {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      KeyGenerator generator = KeyGenerator.getInstance(
-        KeyProperties.KEY_ALGORITHM_AES,
-        ANDROID_KEY_STORE
-      );
-      KeyGenParameterSpec.Builder paramBuilder = new KeyGenParameterSpec.Builder(
-        KEY_ALIAS,
-        KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
-      )
-        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-        .setRandomizedEncryptionRequired(false);
+    KeyGenerator generator = KeyGenerator.getInstance(
+      KeyProperties.KEY_ALGORITHM_AES,
+      ANDROID_KEY_STORE
+    );
+    KeyGenParameterSpec.Builder paramBuilder = new KeyGenParameterSpec.Builder(
+      KEY_ALIAS,
+      KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
+    )
+      .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+      .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+      .setRandomizedEncryptionRequired(true);
 
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || Build.VERSION.SDK_INT > 34) {
-          // Avoiding setUnlockedDeviceRequired(true) due to known issues on Android 12-14
-          paramBuilder.setUnlockedDeviceRequired(true);
-        }
-        paramBuilder.setIsStrongBoxBacked(isStrongBoxBacked);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || Build.VERSION.SDK_INT > 34) {
+        // Avoiding setUnlockedDeviceRequired(true) due to known issues on Android 12-14
+        paramBuilder.setUnlockedDeviceRequired(true);
       }
-
-      generator.init(paramBuilder.build());
-      return generator.generateKey();
-    } else {
-      return getAESKey(KEY_ALIAS);
+      paramBuilder.setIsStrongBoxBacked(isStrongBoxBacked);
     }
+
+    generator.init(paramBuilder.build());
+    return generator.generateKey();
   }
 
   private Key getKey(String KEY_ALIAS)
@@ -477,28 +457,6 @@ public class NativeBiometric extends Plugin {
       keyStore.load(null);
     }
     return keyStore;
-  }
-
-  private Key getAESKey(String KEY_ALIAS)
-    throws CertificateException, NoSuchPaddingException, InvalidKeyException, NoSuchAlgorithmException, KeyStoreException, NoSuchProviderException, UnrecoverableEntryException, IOException, InvalidAlgorithmParameterException {
-    SharedPreferences sharedPreferences = getContext()
-      .getSharedPreferences("", Context.MODE_PRIVATE);
-    String encryptedKeyB64 = sharedPreferences.getString(ENCRYPTED_KEY, null);
-    if (encryptedKeyB64 == null) {
-      byte[] key = new byte[16];
-      SecureRandom secureRandom = new SecureRandom();
-      secureRandom.nextBytes(key);
-      byte[] encryptedKey = rsaEncrypt(key, KEY_ALIAS);
-      encryptedKeyB64 = Base64.encodeToString(encryptedKey, Base64.DEFAULT);
-      SharedPreferences.Editor edit = sharedPreferences.edit();
-      edit.putString(ENCRYPTED_KEY, encryptedKeyB64);
-      edit.apply();
-      return new SecretKeySpec(key, "AES");
-    } else {
-      byte[] encryptedKey = Base64.decode(encryptedKeyB64, Base64.DEFAULT);
-      byte[] key = rsaDecrypt(encryptedKey, KEY_ALIAS);
-      return new SecretKeySpec(key, "AES");
-    }
   }
 
   private KeyStore.PrivateKeyEntry getPrivateKeyEntry(String KEY_ALIAS)
@@ -522,58 +480,10 @@ public class NativeBiometric extends Plugin {
     return privateKeyEntry;
   }
 
-  private byte[] rsaEncrypt(byte[] secret, String KEY_ALIAS)
-    throws CertificateException, NoSuchAlgorithmException, KeyStoreException, IOException, UnrecoverableEntryException, NoSuchProviderException, NoSuchPaddingException, InvalidKeyException, InvalidAlgorithmParameterException {
-    KeyStore.PrivateKeyEntry privateKeyEntry = getPrivateKeyEntry(KEY_ALIAS);
-    // Encrypt the text
-    Cipher inputCipher = Cipher.getInstance(RSA_MODE, "AndroidOpenSSL");
-    inputCipher.init(
-      Cipher.ENCRYPT_MODE,
-      privateKeyEntry.getCertificate().getPublicKey()
-    );
-
-    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-    CipherOutputStream cipherOutputStream = new CipherOutputStream(
-      outputStream,
-      inputCipher
-    );
-    cipherOutputStream.write(secret);
-    cipherOutputStream.close();
-
-    byte[] vals = outputStream.toByteArray();
-    return vals;
-  }
-
-  private byte[] rsaDecrypt(byte[] encrypted, String KEY_ALIAS)
-    throws UnrecoverableEntryException, NoSuchAlgorithmException, KeyStoreException, NoSuchProviderException, NoSuchPaddingException, InvalidKeyException, IOException, CertificateException, InvalidAlgorithmParameterException {
-    KeyStore.PrivateKeyEntry privateKeyEntry = getPrivateKeyEntry(KEY_ALIAS);
-    Cipher output = Cipher.getInstance(RSA_MODE, "AndroidOpenSSL");
-    output.init(Cipher.DECRYPT_MODE, privateKeyEntry.getPrivateKey());
-    CipherInputStream cipherInputStream = new CipherInputStream(
-      new ByteArrayInputStream(encrypted),
-      output
-    );
-    ArrayList<Byte> values = new ArrayList<>();
-    int nextByte;
-    while ((nextByte = cipherInputStream.read()) != -1) {
-      values.add((byte) nextByte);
-    }
-
-    byte[] bytes = new byte[values.size()];
-    for (int i = 0; i < bytes.length; i++) {
-      bytes[i] = values.get(i).byteValue();
-    }
-    return bytes;
-  }
-
   private boolean deviceHasCredentials() {
     KeyguardManager keyguardManager = (KeyguardManager) getActivity()
       .getSystemService(Context.KEYGUARD_SERVICE);
     // Can only use fallback if the device has a pin/pattern/password lockscreen.
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      return keyguardManager.isDeviceSecure();
-    } else {
-      return keyguardManager.isKeyguardSecure();
-    }
+    return keyguardManager.isDeviceSecure();
   }
 }
