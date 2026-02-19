@@ -119,8 +119,7 @@ public class NativeBiometric extends Plugin {
         if (useFallback && deviceIsSecure && !hasWeakBiometric) {
             // Only check combined authenticator if weak biometric alone is not sufficient
             // This provides device credential fallback and may detect very weak biometrics
-            int combinedAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK | 
-                                        BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+            int combinedAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK | BiometricManager.Authenticators.DEVICE_CREDENTIAL;
             int combinedResult = biometricManager.canAuthenticate(combinedAuthenticators);
             hasCombinedAuth = (combinedResult == BiometricManager.BIOMETRIC_SUCCESS);
         }
