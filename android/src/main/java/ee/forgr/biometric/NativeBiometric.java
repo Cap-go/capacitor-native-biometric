@@ -290,8 +290,24 @@ public class NativeBiometric extends Plugin {
         String username = call.getString("username", null);
         String password = call.getString("password", null);
         String KEY_ALIAS = call.getString("server", null);
+        Integer accessControl = call.getInt("accessControl", 0);
 
-        if (username != null && password != null && KEY_ALIAS != null) {
+        if (username == null || password == null || KEY_ALIAS == null) {
+            call.reject("Missing properties");
+            return;
+        }
+
+        if (accessControl != null && accessControl > 0) {
+            Intent intent = new Intent(getContext(), AuthActivity.class);
+            intent.putExtra("mode", "setSecureCredentials");
+            intent.putExtra("server", KEY_ALIAS);
+            intent.putExtra("username", username);
+            intent.putExtra("password", password);
+            intent.putExtra("accessControl", accessControl);
+            intent.putExtra("title", "Protect Credentials");
+            intent.putExtra("negativeButtonText", "Cancel");
+            startActivityForResult(call, intent, "setSecureCredentialsResult");
+        } else {
             try {
                 SharedPreferences.Editor editor = getContext()
                     .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE)
@@ -302,11 +318,38 @@ public class NativeBiometric extends Plugin {
                 call.resolve();
             } catch (GeneralSecurityException | IOException e) {
                 call.reject("Failed to save credentials", e);
-                System.out.println("Error saving credentials: " + e.getMessage());
             }
-        } else {
-            call.reject("Missing properties");
         }
+    }
+
+    @PluginMethod
+    public void getSecureCredentials(final PluginCall call) {
+        String server = call.getString("server", null);
+        if (server == null) {
+            call.reject("No server name was provided");
+            return;
+        }
+
+        SharedPreferences sharedPreferences = getContext().getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE);
+        String encryptedData = sharedPreferences.getString("secure_" + server, null);
+        if (encryptedData == null) {
+            call.reject("No protected credentials found", "21");
+            return;
+        }
+
+        Intent intent = new Intent(getContext(), AuthActivity.class);
+        intent.putExtra("mode", "getSecureCredentials");
+        intent.putExtra("server", server);
+        intent.putExtra("title", call.getString("title", "Authenticate"));
+
+        String subtitle = call.getString("subtitle");
+        if (subtitle != null) intent.putExtra("subtitle", subtitle);
+        String description = call.getString("description");
+        if (description != null) intent.putExtra("description", description);
+        String negativeText = call.getString("negativeButtonText");
+        if (negativeText != null) intent.putExtra("negativeButtonText", negativeText);
+
+        startActivityForResult(call, intent, "getSecureCredentialsResult");
     }
 
     @PluginMethod
@@ -360,6 +403,41 @@ public class NativeBiometric extends Plugin {
         }
     }
 
+    @ActivityCallback
+    private void setSecureCredentialsResult(PluginCall call, ActivityResult result) {
+        if (result.getResultCode() == Activity.RESULT_OK) {
+            Intent data = result.getData();
+            if (data != null && "success".equals(data.getStringExtra("result"))) {
+                call.resolve();
+            } else {
+                String errorCode = data != null ? data.getStringExtra("errorCode") : "0";
+                String errorDetails = data != null ? data.getStringExtra("errorDetails") : "Failed to store credentials";
+                call.reject(errorDetails, errorCode);
+            }
+        } else {
+            call.reject("Failed to store credentials");
+        }
+    }
+
+    @ActivityCallback
+    private void getSecureCredentialsResult(PluginCall call, ActivityResult result) {
+        if (result.getResultCode() == Activity.RESULT_OK) {
+            Intent data = result.getData();
+            if (data != null && "success".equals(data.getStringExtra("result"))) {
+                JSObject jsObject = new JSObject();
+                jsObject.put("username", data.getStringExtra("username"));
+                jsObject.put("password", data.getStringExtra("password"));
+                call.resolve(jsObject);
+            } else {
+                String errorCode = data != null ? data.getStringExtra("errorCode") : "0";
+                String errorDetails = data != null ? data.getStringExtra("errorDetails") : "Authentication failed";
+                call.reject(errorDetails, errorCode);
+            }
+        } else {
+            call.reject("Authentication failed");
+        }
+    }
+
     @PluginMethod
     public void deleteCredentials(final PluginCall call) {
         String KEY_ALIAS = call.getString("server", null);
@@ -372,6 +450,13 @@ public class NativeBiometric extends Plugin {
                     .edit();
                 editor.clear();
                 editor.apply();
+
+                try {
+                    getKeyStore().deleteEntry("NativeBiometricSecure_" + KEY_ALIAS);
+                } catch (KeyStoreException e) {
+                    // Ignore — may not exist
+                }
+
                 call.resolve();
             } catch (KeyStoreException | CertificateException | NoSuchAlgorithmException | IOException e) {
                 call.reject("Failed to delete", e);
@@ -393,8 +478,11 @@ public class NativeBiometric extends Plugin {
             String username = sharedPreferences.getString(KEY_ALIAS + "-username", null);
             String password = sharedPreferences.getString(KEY_ALIAS + "-password", null);
 
+            boolean hasUnprotected = username != null && password != null;
+            boolean hasProtected = sharedPreferences.getString("secure_" + KEY_ALIAS, null) != null;
+
             JSObject ret = new JSObject();
-            ret.put("isSaved", username != null && password != null);
+            ret.put("isSaved", hasUnprotected || hasProtected);
             call.resolve(ret);
         } else {
             call.reject("No server name was provided");
@@ -405,12 +493,15 @@ public class NativeBiometric extends Plugin {
         Cipher cipher;
         cipher = Cipher.getInstance(TRANSFORMATION);
 
-        // Generate a random IV for each encryption operation
-        byte[] iv = new byte[GCM_IV_LENGTH];
-        SecureRandom secureRandom = new SecureRandom();
-        secureRandom.nextBytes(iv);
-
-        cipher.init(Cipher.ENCRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, iv));
+        // Let the system generate the IV to comply with hardware-backed keystore requirements
+        // Modern Android devices with StrongBox/TEE enforce RandomizedEncryption and reject caller-provided IVs
+        cipher.init(Cipher.ENCRYPT_MODE, getKey(KEY_ALIAS));
+        byte[] iv = cipher.getIV(); // Retrieve the system-generated IV
+        if (iv == null || iv.length != GCM_IV_LENGTH) {
+            throw new GeneralSecurityException(
+                "Failed to generate valid IV: expected " + GCM_IV_LENGTH + " bytes, got " + (iv == null ? "null" : iv.length + " bytes")
+            );
+        }
         byte[] encryptedBytes = cipher.doFinal(stringToEncrypt.getBytes(StandardCharsets.UTF_8));
 
         // Prepend IV to the encrypted data

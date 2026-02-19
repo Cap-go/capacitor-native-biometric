@@ -11,7 +11,7 @@ import LocalAuthentication
 
 @objc(NativeBiometricPlugin)
 public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
-    private let pluginVersion: String = "8.3.1"
+    private let pluginVersion: String = "8.3.7"
     public let identifier = "NativeBiometricPlugin"
     public let jsName = "NativeBiometric"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -20,6 +20,7 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getCredentials", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setCredentials", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "deleteCredentials", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getSecureCredentials", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isCredentialsSaved", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
     ]
@@ -196,20 +197,95 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
+        let accessControl = call.getInt("accessControl") ?? 0
         let credentials = Credentials(username: username, password: password)
 
-        do {
-            try storeCredentialsInKeychain(credentials, server)
-            call.resolve()
-        } catch KeychainError.duplicateItem {
+        if accessControl > 0 {
             do {
-                try updateCredentialsInKeychain(credentials, server)
+                try storeProtectedCredentials(credentials, server, accessControl)
                 call.resolve()
+            } catch KeychainError.duplicateItem {
+                do {
+                    try deleteProtectedCredentials(server)
+                    try storeProtectedCredentials(credentials, server, accessControl)
+                    call.resolve()
+                } catch {
+                    call.reject(error.localizedDescription)
+                }
             } catch {
                 call.reject(error.localizedDescription)
             }
-        } catch {
-            call.reject(error.localizedDescription)
+        } else {
+            do {
+                try storeCredentialsInKeychain(credentials, server)
+                call.resolve()
+            } catch KeychainError.duplicateItem {
+                do {
+                    try updateCredentialsInKeychain(credentials, server)
+                    call.resolve()
+                } catch {
+                    call.reject(error.localizedDescription)
+                }
+            } catch {
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    @objc func getSecureCredentials(_ call: CAPPluginCall) {
+        guard let server = call.getString("server") else {
+            call.reject("No server name was provided")
+            return
+        }
+
+        let context = LAContext()
+        if let reason = call.getString("reason") {
+            context.localizedReason = reason
+        }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: server,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnAttributes as String: true,
+            kSecReturnData as String: true,
+            kSecUseAuthenticationContext as String: context
+        ]
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            var item: CFTypeRef?
+            let status = SecItemCopyMatching(query as CFDictionary, &item)
+
+            DispatchQueue.main.async {
+                if status == errSecUserCanceled {
+                    call.reject("User canceled biometric authentication", "16")
+                    return
+                }
+                guard status == errSecSuccess else {
+                    if status == errSecItemNotFound {
+                        call.reject("No protected credentials found for server", "21")
+                    } else if status == errSecAuthFailed {
+                        call.reject("Biometric authentication failed", "10")
+                    } else {
+                        call.reject("Failed to retrieve credentials: \(status)", "0")
+                    }
+                    return
+                }
+
+                guard let existingItem = item as? [String: Any],
+                      let passwordData = existingItem[kSecValueData as String] as? Data,
+                      let password = String(data: passwordData, encoding: .utf8),
+                      let username = existingItem[kSecAttrAccount as String] as? String
+                else {
+                    call.reject("Unexpected credential data")
+                    return
+                }
+
+                var obj = JSObject()
+                obj["username"] = username
+                obj["password"] = password
+                call.resolve(obj)
+            }
         }
     }
 
@@ -221,6 +297,7 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
 
         do {
             try deleteCredentialsFromKeychain(server)
+            try deleteProtectedCredentials(server)
             call.resolve()
         } catch {
             call.reject(error.localizedDescription)
@@ -234,11 +311,10 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         var obj = JSObject()
-        obj["isSaved"] = checkCredentialsExist(server)
+        obj["isSaved"] = checkCredentialsExist(server) || checkProtectedCredentialsExist(server)
         call.resolve(obj)
     }
 
-    // Check if credentials exist in Keychain
     func checkCredentialsExist(_ server: String) -> Bool {
         let query: [String: Any] = [kSecClass as String: kSecClassInternetPassword,
                                     kSecAttrServer as String: server,
@@ -248,7 +324,53 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         return status == errSecSuccess
     }
 
-    // Store user Credentials in Keychain
+    func checkProtectedCredentialsExist(_ server: String) -> Bool {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrService as String: server,
+                                    kSecMatchLimit as String: kSecMatchLimitOne]
+
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        return status == errSecSuccess
+    }
+
+    func storeProtectedCredentials(_ credentials: Credentials, _ server: String, _ accessControl: Int) throws {
+        guard let passwordData = credentials.password.data(using: .utf8) else {
+            throw KeychainError.unexpectedPasswordData
+        }
+
+        let flags: SecAccessControlCreateFlags = accessControl == 1 ? .biometryCurrentSet : .biometryAny
+        guard let access = SecAccessControlCreateWithFlags(
+            kCFAllocatorDefault,
+            kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+            flags,
+            nil
+        ) else {
+            throw KeychainError.unhandledError(status: errSecParam)
+        }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: server,
+            kSecAttrAccount as String: credentials.username,
+            kSecValueData as String: passwordData,
+            kSecAttrAccessControl as String: access
+        ]
+
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status != errSecDuplicateItem else { throw KeychainError.duplicateItem }
+        guard status == errSecSuccess else { throw KeychainError.unhandledError(status: status) }
+    }
+
+    func deleteProtectedCredentials(_ server: String) throws {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrService as String: server]
+
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError.unhandledError(status: status)
+        }
+    }
+
     func storeCredentialsInKeychain(_ credentials: Credentials, _ server: String) throws {
         guard let passwordData = credentials.password.data(using: .utf8) else {
             throw KeychainError.unexpectedPasswordData
