@@ -36,6 +36,26 @@ export enum AuthenticationStrength {
   WEAK = 2,
 }
 
+export enum AccessControl {
+  /**
+   * No biometric protection. Credentials are accessible without authentication.
+   * This is the default behavior for backward compatibility.
+   */
+  NONE = 0,
+  /**
+   * Biometric authentication required for credential access.
+   * Credentials are invalidated if biometrics change (e.g., new fingerprint enrolled).
+   * More secure but credentials are lost if user modifies their biometric enrollment.
+   */
+  BIOMETRY_CURRENT_SET = 1,
+  /**
+   * Biometric authentication required for credential access.
+   * Credentials survive new biometric enrollment (e.g., adding a new fingerprint).
+   * More lenient — recommended for most apps.
+   */
+  BIOMETRY_ANY = 2,
+}
+
 export interface Credentials {
   username: string;
   password: string;
@@ -129,6 +149,48 @@ export interface SetCredentialOptions {
   username: string;
   password: string;
   server: string;
+  /**
+   * Access control level for the stored credentials.
+   * When set to BIOMETRY_CURRENT_SET or BIOMETRY_ANY, the credentials are
+   * hardware-protected and require biometric authentication to access.
+   *
+   * On iOS, this adds SecAccessControl to the Keychain item.
+   * On Android, this creates a biometric-protected Keystore key and requires
+   * BiometricPrompt authentication for both storing and retrieving credentials.
+   *
+   * @default AccessControl.NONE
+   * @since 8.4.0
+   */
+  accessControl?: AccessControl;
+}
+
+export interface GetSecureCredentialsOptions {
+  server: string;
+  /**
+   * Reason for requesting biometric authentication.
+   * Displayed in the biometric prompt on both iOS and Android.
+   */
+  reason?: string;
+  /**
+   * Title for the biometric prompt.
+   * Only for Android.
+   */
+  title?: string;
+  /**
+   * Subtitle for the biometric prompt.
+   * Only for Android.
+   */
+  subtitle?: string;
+  /**
+   * Description for the biometric prompt.
+   * Only for Android.
+   */
+  description?: string;
+  /**
+   * Text for the negative/cancel button.
+   * Only for Android.
+   */
+  negativeButtonText?: string;
 }
 
 export interface DeleteCredentialOptions {
@@ -285,6 +347,19 @@ export interface NativeBiometricPlugin {
    * @since 1.0.0
    */
   deleteCredentials(options: DeleteCredentialOptions): Promise<void>;
+  /**
+   * Gets the stored credentials for a given server, requiring biometric authentication.
+   * Credentials must have been stored with accessControl set to BIOMETRY_CURRENT_SET or BIOMETRY_ANY.
+   *
+   * On iOS, the system automatically shows the biometric prompt when accessing the protected Keychain item.
+   * On Android, BiometricPrompt is shown with a CryptoObject bound to the credential decryption key.
+   *
+   * @param {GetSecureCredentialsOptions} options
+   * @returns {Promise<Credentials>}
+   * @memberof NativeBiometricPlugin
+   * @since 8.4.0
+   */
+  getSecureCredentials(options: GetSecureCredentialsOptions): Promise<Credentials>;
   /**
    * Checks if credentials are already saved for a given server.
    * @param {IsCredentialsSavedOptions} options
