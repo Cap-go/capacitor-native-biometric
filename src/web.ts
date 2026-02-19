@@ -6,6 +6,7 @@ import type {
   AvailableResult,
   BiometricOptions,
   GetCredentialOptions,
+  GetSecureCredentialsOptions,
   SetCredentialOptions,
   DeleteCredentialOptions,
   IsCredentialsSavedOptions,
@@ -58,7 +59,15 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
 
   getCredentials(_options: GetCredentialOptions): Promise<Credentials> {
     console.log('getCredentials (dummy implementation)', { server: _options.server });
-    // Dummy implementation: retrieve from in-memory store
+    const credentials = this.credentialStore.get(_options.server);
+    if (!credentials) {
+      throw new Error('No credentials found for the specified server');
+    }
+    return Promise.resolve(credentials);
+  }
+
+  getSecureCredentials(_options: GetSecureCredentialsOptions): Promise<Credentials> {
+    console.log('getSecureCredentials (dummy implementation)', { server: _options.server });
     const credentials = this.credentialStore.get(_options.server);
     if (!credentials) {
       throw new Error('No credentials found for the specified server');

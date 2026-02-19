@@ -283,6 +283,7 @@ This is a plugin specific list of error codes that can be thrown on verifyIdenti
 * [`getCredentials(...)`](#getcredentials)
 * [`setCredentials(...)`](#setcredentials)
 * [`deleteCredentials(...)`](#deletecredentials)
+* [`getSecureCredentials(...)`](#getsecurecredentials)
 * [`isCredentialsSaved(...)`](#iscredentialssaved)
 * [`getPluginVersion()`](#getpluginversion)
 * [Interfaces](#interfaces)
@@ -405,6 +406,29 @@ Deletes the stored credentials for a given server.
 --------------------
 
 
+### getSecureCredentials(...)
+
+```typescript
+getSecureCredentials(options: GetSecureCredentialsOptions) => Promise<Credentials>
+```
+
+Gets the stored credentials for a given server, requiring biometric authentication.
+Credentials must have been stored with accessControl set to BIOMETRY_CURRENT_SET or BIOMETRY_ANY.
+
+On iOS, the system automatically shows the biometric prompt when accessing the protected Keychain item.
+On Android, BiometricPrompt is shown with a CryptoObject bound to the credential decryption key.
+
+| Param         | Type                                                                                |
+| ------------- | ----------------------------------------------------------------------------------- |
+| **`options`** | <code><a href="#getsecurecredentialsoptions">GetSecureCredentialsOptions</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#credentials">Credentials</a>&gt;</code>
+
+**Since:** 8.4.0
+
+--------------------
+
+
 ### isCredentialsSaved(...)
 
 ```typescript
@@ -502,11 +526,12 @@ Result from isAvailable() method indicating biometric authentication availabilit
 
 #### SetCredentialOptions
 
-| Prop           | Type                |
-| -------------- | ------------------- |
-| **`username`** | <code>string</code> |
-| **`password`** | <code>string</code> |
-| **`server`**   | <code>string</code> |
+| Prop                | Type                                                    | Description                                                                                                                                                                                                                                                                                                                                                                                             | Default                         | Since |
+| ------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ----- |
+| **`username`**      | <code>string</code>                                     |                                                                                                                                                                                                                                                                                                                                                                                                         |                                 |       |
+| **`password`**      | <code>string</code>                                     |                                                                                                                                                                                                                                                                                                                                                                                                         |                                 |       |
+| **`server`**        | <code>string</code>                                     |                                                                                                                                                                                                                                                                                                                                                                                                         |                                 |       |
+| **`accessControl`** | <code><a href="#accesscontrol">AccessControl</a></code> | Access control level for the stored credentials. When set to BIOMETRY_CURRENT_SET or BIOMETRY_ANY, the credentials are hardware-protected and require biometric authentication to access. On iOS, this adds SecAccessControl to the Keychain item. On Android, this creates a biometric-protected Keystore key and requires BiometricPrompt authentication for both storing and retrieving credentials. | <code>AccessControl.NONE</code> | 8.4.0 |
 
 
 #### DeleteCredentialOptions
@@ -514,6 +539,18 @@ Result from isAvailable() method indicating biometric authentication availabilit
 | Prop         | Type                |
 | ------------ | ------------------- |
 | **`server`** | <code>string</code> |
+
+
+#### GetSecureCredentialsOptions
+
+| Prop                     | Type                | Description                                                                                                |
+| ------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **`server`**             | <code>string</code> |                                                                                                            |
+| **`reason`**             | <code>string</code> | Reason for requesting biometric authentication. Displayed in the biometric prompt on both iOS and Android. |
+| **`title`**              | <code>string</code> | Title for the biometric prompt. Only for Android.                                                          |
+| **`subtitle`**           | <code>string</code> | Subtitle for the biometric prompt. Only for Android.                                                       |
+| **`description`**        | <code>string</code> | Description for the biometric prompt. Only for Android.                                                    |
+| **`negativeButtonText`** | <code>string</code> | Text for the negative/cancel button. Only for Android.                                                     |
 
 
 #### IsCredentialsSavedResult
@@ -583,6 +620,15 @@ Callback type for biometry change listener
 | **`SYSTEM_CANCEL`**           | <code>15</code> | System canceled the authentication (e.g., due to screen lock) Platform: Android, iOS  |
 | **`USER_CANCEL`**             | <code>16</code> | User canceled the authentication Platform: Android, iOS                               |
 | **`USER_FALLBACK`**           | <code>17</code> | User chose to use fallback authentication method Platform: Android, iOS               |
+
+
+#### AccessControl
+
+| Members                    | Value          | Description                                                                                                                                                                                                                   |
+| -------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`NONE`**                 | <code>0</code> | No biometric protection. <a href="#credentials">Credentials</a> are accessible without authentication. This is the default behavior for backward compatibility.                                                               |
+| **`BIOMETRY_CURRENT_SET`** | <code>1</code> | Biometric authentication required for credential access. Credentials are invalidated if biometrics change (e.g., new fingerprint enrolled). More secure but credentials are lost if user modifies their biometric enrollment. |
+| **`BIOMETRY_ANY`**         | <code>2</code> | Biometric authentication required for credential access. Credentials survive new biometric enrollment (e.g., adding a new fingerprint). More lenient — recommended for most apps.                                             |
 
 </docgen-api>
 ## Face ID (iOS)
