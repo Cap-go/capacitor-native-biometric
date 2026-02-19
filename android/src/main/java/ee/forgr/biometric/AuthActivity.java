@@ -1,18 +1,21 @@
 package ee.forgr.biometric;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyPermanentlyInvalidatedException;
 import android.security.keystore.KeyProperties;
+import android.util.Base64;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
 import ee.forgr.biometric.capacitornativebiometric.R;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -24,14 +27,20 @@ import java.util.concurrent.Executor;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import org.json.JSONObject;
 
 public class AuthActivity extends AppCompatActivity {
 
     private static final String AUTH_KEY_ALIAS = "NativeBiometricAuthKey";
     private static final String AUTH_TRANSFORMATION = "AES/GCM/NoPadding";
+    private static final String SECURE_KEY_PREFIX = "NativeBiometricSecure_";
+    private static final int CREDENTIAL_GCM_IV_LENGTH = 12;
+    private static final String SHARED_PREFS_NAME = "NativeBiometricSharedPreferences";
 
     private BiometricPrompt biometricPrompt;
     private Cipher authCipher;
+    private String mode;
     private int maxAttempts;
     private int counter = 0;
 
@@ -40,7 +49,9 @@ public class AuthActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_auth_acitivy);
 
-        // Get maxAttempts with validation: must be between 1 and 5, default to 1
+        mode = getIntent().getStringExtra("mode");
+        if (mode == null) mode = "verify";
+
         int rawMaxAttempts = getIntent().getIntExtra("maxAttempts", 1);
         maxAttempts = Math.max(1, Math.min(5, rawMaxAttempts));
 
@@ -100,11 +111,17 @@ public class AuthActivity extends AppCompatActivity {
                 @Override
                 public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
                     super.onAuthenticationSucceeded(result);
-                    if (!validateCryptoObject(result)) {
-                        finishActivity("error", 10, "Biometric security check failed");
-                        return;
+                    if ("setSecureCredentials".equals(mode)) {
+                        handleSetSecureCredentials(result);
+                    } else if ("getSecureCredentials".equals(mode)) {
+                        handleGetSecureCredentials(result);
+                    } else {
+                        if (!validateCryptoObject(result)) {
+                            finishActivity("error", 10, "Biometric security check failed");
+                            return;
+                        }
+                        finishActivity();
                     }
-                    finishActivity();
                 }
 
                 @Override
@@ -120,7 +137,14 @@ public class AuthActivity extends AppCompatActivity {
             }
         );
 
-        BiometricPrompt.CryptoObject cryptoObject = createCryptoObject();
+        BiometricPrompt.CryptoObject cryptoObject;
+        if ("setSecureCredentials".equals(mode)) {
+            cryptoObject = createCredentialEncryptCryptoObject();
+        } else if ("getSecureCredentials".equals(mode)) {
+            cryptoObject = createCredentialDecryptCryptoObject();
+        } else {
+            cryptoObject = createCryptoObject();
+        }
         if (cryptoObject == null) {
             finishActivity("error", 0, "Biometric crypto object unavailable");
             return;
@@ -231,6 +255,140 @@ public class AuthActivity extends AppCompatActivity {
             return true;
         } catch (GeneralSecurityException | IllegalStateException e) {
             return false;
+        }
+    }
+
+    private SecretKey getOrCreateCredentialKey(String server, int accessControl) throws GeneralSecurityException, IOException {
+        String alias = SECURE_KEY_PREFIX + server;
+        KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
+        ks.load(null);
+
+        if (ks.containsAlias(alias)) {
+            return (SecretKey) ks.getKey(alias, null);
+        }
+
+        KeyGenerator keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+        KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(
+            alias,
+            KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
+        )
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setUserAuthenticationRequired(true);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            builder.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG);
+        } else {
+            builder.setUserAuthenticationValidityDurationSeconds(1);
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            builder.setInvalidatedByBiometricEnrollment(accessControl == 1);
+        }
+
+        keyGenerator.init(builder.build());
+        return keyGenerator.generateKey();
+    }
+
+    private BiometricPrompt.CryptoObject createCredentialEncryptCryptoObject() {
+        try {
+            String server = getIntent().getStringExtra("server");
+            int accessControl = getIntent().getIntExtra("accessControl", 2);
+            SecretKey key = getOrCreateCredentialKey(server, accessControl);
+            Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
+            try {
+                cipher.init(Cipher.ENCRYPT_MODE, key);
+            } catch (KeyPermanentlyInvalidatedException e) {
+                KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
+                ks.load(null);
+                ks.deleteEntry(SECURE_KEY_PREFIX + server);
+                key = getOrCreateCredentialKey(server, accessControl);
+                cipher.init(Cipher.ENCRYPT_MODE, key);
+            }
+            return new BiometricPrompt.CryptoObject(cipher);
+        } catch (GeneralSecurityException | IOException e) {
+            return null;
+        }
+    }
+
+    private BiometricPrompt.CryptoObject createCredentialDecryptCryptoObject() {
+        try {
+            String server = getIntent().getStringExtra("server");
+            SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+            String encryptedData = prefs.getString("secure_" + server, null);
+            if (encryptedData == null) return null;
+
+            byte[] combined = Base64.decode(encryptedData, Base64.DEFAULT);
+            byte[] iv = new byte[CREDENTIAL_GCM_IV_LENGTH];
+            System.arraycopy(combined, 0, iv, 0, CREDENTIAL_GCM_IV_LENGTH);
+
+            SecretKey key = getOrCreateCredentialKey(server, 0);
+            Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
+            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
+            return new BiometricPrompt.CryptoObject(cipher);
+        } catch (GeneralSecurityException | IOException e) {
+            return null;
+        }
+    }
+
+    private void handleSetSecureCredentials(BiometricPrompt.AuthenticationResult result) {
+        try {
+            Cipher cipher = result.getCryptoObject().getCipher();
+            String username = getIntent().getStringExtra("username");
+            String password = getIntent().getStringExtra("password");
+            String server = getIntent().getStringExtra("server");
+
+            JSONObject json = new JSONObject();
+            json.put("u", username);
+            json.put("p", password);
+
+            byte[] encrypted = cipher.doFinal(json.toString().getBytes(StandardCharsets.UTF_8));
+            byte[] iv = cipher.getIV();
+
+            byte[] combined = new byte[iv.length + encrypted.length];
+            System.arraycopy(iv, 0, combined, 0, iv.length);
+            System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
+
+            String encoded = Base64.encodeToString(combined, Base64.DEFAULT);
+
+            SharedPreferences.Editor editor = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit();
+            editor.putString("secure_" + server, encoded);
+            editor.apply();
+
+            finishActivity();
+        } catch (Exception e) {
+            finishActivity("error", 0, "Failed to encrypt credentials: " + e.getMessage());
+        }
+    }
+
+    private void handleGetSecureCredentials(BiometricPrompt.AuthenticationResult result) {
+        try {
+            Cipher cipher = result.getCryptoObject().getCipher();
+            String server = getIntent().getStringExtra("server");
+
+            SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+            String encryptedData = prefs.getString("secure_" + server, null);
+            if (encryptedData == null) {
+                finishActivity("error", 21, "No protected credentials found");
+                return;
+            }
+
+            byte[] combined = Base64.decode(encryptedData, Base64.DEFAULT);
+            byte[] ciphertext = new byte[combined.length - CREDENTIAL_GCM_IV_LENGTH];
+            System.arraycopy(combined, CREDENTIAL_GCM_IV_LENGTH, ciphertext, 0, ciphertext.length);
+
+            byte[] decrypted = cipher.doFinal(ciphertext);
+            String jsonStr = new String(decrypted, StandardCharsets.UTF_8);
+            JSONObject json = new JSONObject(jsonStr);
+
+            Intent intent = new Intent();
+            intent.putExtra("result", "success");
+            intent.putExtra("username", json.getString("u"));
+            intent.putExtra("password", json.getString("p"));
+            setResult(RESULT_OK, intent);
+            finish();
+        } catch (Exception e) {
+            finishActivity("error", 0, "Failed to decrypt credentials: " + e.getMessage());
         }
     }
 
