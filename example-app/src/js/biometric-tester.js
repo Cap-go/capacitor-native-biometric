@@ -1,4 +1,4 @@
-import { NativeBiometric, AuthenticationStrength } from '@capgo/capacitor-native-biometric';
+import { NativeBiometric, AuthenticationStrength, AccessControl } from '@capgo/capacitor-native-biometric';
 import { SplashScreen } from '@capacitor/splash-screen';
 
 // Simple function-based approach - no Web Components
@@ -150,6 +150,29 @@ function createBiometricTester() {
     </div>
 
     <div class="section">
+      <h2>Secure Credentials (Biometric-Protected)</h2>
+      <div class="info">
+        Credentials stored with hardware-enforced biometric protection.<br>
+        Set requires biometric on Android. Get always requires biometric on both platforms.
+      </div>
+      <div class="form-group">
+        <label for="secure-server">Server:</label>
+        <input type="text" id="secure-server" value="secure.example.com" placeholder="Enter server URL">
+      </div>
+      <div class="form-group">
+        <label for="secure-username">Username:</label>
+        <input type="text" id="secure-username" value="secureuser" placeholder="Enter username">
+      </div>
+      <div class="form-group">
+        <label for="secure-password">Password:</label>
+        <input type="password" id="secure-password" value="securepass123" placeholder="Enter password">
+      </div>
+      <button class="button" id="set-secure-credentials">Set Secure Credentials</button>
+      <button class="button" id="get-secure-credentials">Get Secure Credentials</button>
+      <div id="secure-credentials-result"></div>
+    </div>
+
+    <div class="section">
       <h2>Login Flow Demo (Issue Use Case)</h2>
       <div class="info">
         This section demonstrates the exact use case from the issue:<br>
@@ -214,7 +237,13 @@ function createBiometricTester() {
     consoleLogs: container.querySelector('#console-logs'),
     server: container.querySelector('#server'),
     username: container.querySelector('#username'),
-    password: container.querySelector('#password')
+    password: container.querySelector('#password'),
+    setSecureCredentials: container.querySelector('#set-secure-credentials'),
+    getSecureCredentials: container.querySelector('#get-secure-credentials'),
+    secureCredentialsResult: container.querySelector('#secure-credentials-result'),
+    secureServer: container.querySelector('#secure-server'),
+    secureUsername: container.querySelector('#secure-username'),
+    securePassword: container.querySelector('#secure-password')
   };
 
   // Override console.log to capture logs
@@ -256,6 +285,8 @@ function createBiometricTester() {
   elements.checkCredentialsSaved.addEventListener('click', checkCredentialsSaved);
   elements.deleteCredentials.addEventListener('click', deleteCredentials);
   elements.simulateLogin.addEventListener('click', simulateLoginFlow);
+  elements.setSecureCredentials.addEventListener('click', setSecureCredentials);
+  elements.getSecureCredentials.addEventListener('click', getSecureCredentials);
   elements.executeDebug.addEventListener('click', executeDebug);
 
   // Functions
@@ -399,6 +430,57 @@ function createBiometricTester() {
     }
   }
 
+  async function setSecureCredentials() {
+    const server = elements.secureServer.value;
+    const username = elements.secureUsername.value;
+    const password = elements.securePassword.value;
+
+    if (!server || !username || !password) {
+      showResult(elements.secureCredentialsResult, '❌ Please fill in all fields', 'error');
+      return;
+    }
+
+    try {
+      addConsoleLog('INFO', [`Setting secure credentials for server: ${server}`]);
+      await NativeBiometric.setCredentials({
+        username,
+        password,
+        server,
+        accessControl: AccessControl.BIOMETRY_ANY,
+      });
+      addConsoleLog('SUCCESS', ['✅ Secure credentials saved!']);
+      showResult(elements.secureCredentialsResult, '✅ Secure credentials saved with biometric protection!', 'success');
+    } catch (error) {
+      addConsoleLog('ERROR', ['Set secure credentials failed:', error]);
+      showResult(elements.secureCredentialsResult, `❌ Save failed: ${error.message || error}`, 'error');
+    }
+  }
+
+  async function getSecureCredentials() {
+    const server = elements.secureServer.value;
+
+    if (!server) {
+      showResult(elements.secureCredentialsResult, '❌ Please enter server', 'error');
+      return;
+    }
+
+    try {
+      addConsoleLog('INFO', [`Getting secure credentials for server: ${server}`]);
+      const credentials = await NativeBiometric.getSecureCredentials({
+        server,
+        reason: 'Authenticate to access your credentials',
+        title: 'Access Credentials',
+      });
+      addConsoleLog('SUCCESS', ['✅ Secure credentials retrieved:', credentials]);
+      showResult(elements.secureCredentialsResult,
+        `<strong>Retrieved Secure Credentials:</strong><br>Username: ${credentials.username}<br>Password: ${credentials.password}`,
+        'success');
+    } catch (error) {
+      addConsoleLog('ERROR', ['Get secure credentials failed:', error]);
+      showResult(elements.secureCredentialsResult, `❌ Get failed: ${error.message || error}`, 'error');
+    }
+  }
+
   async function simulateLoginFlow() {
     const username = elements.loginUsername.value;
     const password = elements.loginPassword.value;
@@ -497,7 +579,6 @@ function createBiometricTester() {
       addConsoleLog('ERROR', ['Login flow failed:', error]);
       showResult(elements.loginFlowResult, `❌ Login flow error: ${error.message || error}`, 'error');
     }
-  }
   }
 
   async function executeDebug() {
