@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.hardware.fingerprint.FingerprintManager;
 import android.os.Build;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
@@ -180,6 +181,12 @@ public class NativeBiometric extends Plugin {
         if (hasFace) typeCount++;
         if (hasIris) typeCount++;
 
+        // Prefer FINGERPRINT when enrolled, even on devices advertising multiple biometric sensors.
+        // This avoids returning MULTIPLE in common cases where only fingerprint is actually enabled.
+        if (hasFingerprint && isFingerprintEnrolled()) {
+            return FINGERPRINT;
+        }
+
         if (typeCount > 1) {
             return MULTIPLE; // Multiple biometry types available
         } else if (hasFingerprint) {
@@ -197,6 +204,19 @@ public class NativeBiometric extends Plugin {
         }
 
         return NONE;
+    }
+
+    private boolean isFingerprintEnrolled() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return false;
+        }
+
+        try {
+            FingerprintManager fingerprintManager = getContext().getSystemService(FingerprintManager.class);
+            return fingerprintManager != null && fingerprintManager.hasEnrolledFingerprints();
+        } catch (SecurityException ignored) {
+            return false;
+        }
     }
 
     @PluginMethod
