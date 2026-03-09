@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.hardware.fingerprint.FingerprintManager;
 import android.os.Build;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
@@ -238,7 +239,32 @@ public class NativeBiometric extends Plugin {
             primaryType = biometricEnrolled ? MULTIPLE : NONE;
         }
 
+        // Final precedence adjustment for mixed-hardware devices (for example devices that expose
+        // both face + fingerprint hardware but only fingerprint is enrolled):
+        // after calculating the generic primaryType, prefer FINGERPRINT when biometric auth is
+        // actually available and at least one fingerprint is enrolled. This avoids returning
+        // MULTIPLE in common cases where only fingerprint is enabled.
+        if (biometricEnrolled && hasFingerprint && isFingerprintEnrolled()) {
+            return new BiometryInfo(FINGERPRINT, supportedTypes);
+        }
+
         return new BiometryInfo(primaryType, supportedTypes);
+    }
+
+    private boolean isFingerprintEnrolled() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return false;
+        }
+
+        try {
+            // FingerprintManager is deprecated, but BiometricManager does not expose a direct
+            // "fingerprint enrolled" signal. We only use this as a tie-breaker on mixed-hardware
+            // devices after generic biometric availability has already been confirmed.
+            FingerprintManager fingerprintManager = getContext().getSystemService(FingerprintManager.class);
+            return fingerprintManager != null && fingerprintManager.hasEnrolledFingerprints();
+        } catch (SecurityException ignored) {
+            return false;
+        }
     }
 
     @PluginMethod
