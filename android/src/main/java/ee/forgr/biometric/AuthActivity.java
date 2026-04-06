@@ -17,6 +17,7 @@ import ee.forgr.biometric.capacitornativebiometric.R;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.InvalidKeyException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -183,7 +184,9 @@ public class AuthActivity extends AppCompatActivity {
         Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
         try {
             cipher.init(Cipher.ENCRYPT_MODE, secretKey);
-        } catch (KeyPermanentlyInvalidatedException e) {
+        } catch (InvalidKeyException e) {
+            // Handles KeyPermanentlyInvalidatedException (biometric enrollment changed) and
+            // UserNotAuthenticatedException (key was created with time-based auth on older Android).
             deleteSecretKey();
             secretKey = getOrCreateSecretKey();
             cipher.init(Cipher.ENCRYPT_MODE, secretKey);
@@ -221,7 +224,10 @@ public class AuthActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             builder.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG);
         } else {
-            builder.setUserAuthenticationValidityDurationSeconds(1);
+            // Use -1 for per-operation authentication, required for BiometricPrompt CryptoObject binding.
+            // A positive value creates a time-based key that throws UserNotAuthenticatedException
+            // when cipher.init() is called before authentication, breaking CryptoObject creation.
+            builder.setUserAuthenticationValidityDurationSeconds(-1);
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -279,7 +285,8 @@ public class AuthActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             builder.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG);
         } else {
-            builder.setUserAuthenticationValidityDurationSeconds(1);
+            // Use -1 for per-operation authentication, required for BiometricPrompt CryptoObject binding.
+            builder.setUserAuthenticationValidityDurationSeconds(-1);
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -298,7 +305,9 @@ public class AuthActivity extends AppCompatActivity {
             Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
             try {
                 cipher.init(Cipher.ENCRYPT_MODE, key);
-            } catch (KeyPermanentlyInvalidatedException e) {
+            } catch (InvalidKeyException e) {
+                // Handles KeyPermanentlyInvalidatedException and UserNotAuthenticatedException
+                // (key created with time-based auth on older Android).
                 KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
                 ks.load(null);
                 ks.deleteEntry(SECURE_KEY_PREFIX + server);
@@ -324,7 +333,18 @@ public class AuthActivity extends AppCompatActivity {
 
             SecretKey key = getOrCreateCredentialKey(server, 0);
             Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
-            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
+            try {
+                cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
+            } catch (InvalidKeyException e) {
+                // Key was created with incompatible parameters (e.g., time-based auth on older
+                // Android). Delete the unusable key and the encrypted data so the user can
+                // re-enroll credentials via setSecureCredentials.
+                KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
+                ks.load(null);
+                ks.deleteEntry(SECURE_KEY_PREFIX + server);
+                prefs.edit().remove("secure_" + server).apply();
+                return null;
+            }
             return new BiometricPrompt.CryptoObject(cipher);
         } catch (GeneralSecurityException | IOException e) {
             return null;
