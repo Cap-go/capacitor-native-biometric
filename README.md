@@ -1,5 +1,5 @@
 # Capacitor Native Biometric 
- <a href="https://capgo.app/"><img src='https://raw.githubusercontent.com/Cap-go/capgo/main/assets/capgo_banner.png' alt='Capgo - Instant updates for capacitor'/></a>
+<a href="https://capgo.app/"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-native-biometric" alt="Capgo - Instant updates for Capacitor" /></a>
  
 <div align="center">
   <h2><a href="https://capgo.app/?ref=plugin_native_biometric"> ➡️ Get Instant updates for your App with Capgo</a></h2>
