@@ -19,9 +19,9 @@
     "rebuild:android": "npm run build && cap sync android"
   },
   "dependencies": {
-    "@capacitor/camera": "latest",
+    "@capacitor/camera": "^8.2.0",
     "@capacitor/core": "^8.0.0",
-    "@capacitor/splash-screen": "latest",
+    "@capacitor/splash-screen": "^8.0.1",
     "@capgo/capacitor-native-biometric": "file:../"
   },
   "devDependencies": {

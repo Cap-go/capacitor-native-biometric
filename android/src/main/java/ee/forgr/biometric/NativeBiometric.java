@@ -129,9 +129,6 @@ public class NativeBiometric extends Plugin {
         if (hasStrongBiometric) {
             authenticationStrength = AUTH_STRENGTH_STRONG;
             isAvailable = true;
-        } else if (hasWeakBiometric) {
-            authenticationStrength = AUTH_STRENGTH_WEAK;
-            isAvailable = true;
         } else if (fallbackAvailable) {
             authenticationStrength = AUTH_STRENGTH_WEAK;
             isAvailable = true;

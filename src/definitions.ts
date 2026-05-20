@@ -63,9 +63,9 @@ export interface Credentials {
 
 export interface IsAvailableOptions {
   /**
-   * Only for iOS.
-   * Specifies if should fallback to passcode authentication if biometric authentication is not available.
-   * On Android, this parameter is ignored due to BiometricPrompt API constraints:
+   * Specifies if passcode or device credentials should be considered when biometric authentication is not available.
+   * On Android, this can make `isAvailable()` return true when the device has a secure lock screen.
+   * The `verifyIdentity()` flow still ignores this option on Android due to BiometricPrompt API constraints:
    * DEVICE_CREDENTIAL authenticator and negative button (cancel) are mutually exclusive.
    */
   useFallback: boolean;
@@ -76,7 +76,13 @@ export interface IsAvailableOptions {
  */
 export interface AvailableResult {
   /**
-   * Whether authentication is available (biometric or fallback if useFallback is true)
+   * Whether authentication is available.
+   *
+   * On Android, `verifyIdentity()` uses a `CryptoObject` backed by
+   * `BIOMETRIC_STRONG`, so weak-only biometric methods such as some face unlock
+   * implementations are reported via `biometryType`/`authenticationStrength`
+   * but do not make this value `true`.
+   * If `useFallback` is true, PIN/pattern/password can make this value true.
    */
   isAvailable: boolean;
   /**
