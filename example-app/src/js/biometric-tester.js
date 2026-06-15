@@ -1,4 +1,10 @@
-import { NativeBiometric, AuthenticationStrength, AccessControl } from '@capgo/capacitor-native-biometric';
+import { CapacitorUpdater } from '@capgo/capacitor-updater';
+import { Capacitor } from '@capacitor/core';
+import {
+  NativeBiometric,
+  AuthenticationStrength,
+  AccessControl,
+} from '@capgo/capacitor-native-biometric';
 import { SplashScreen } from '@capacitor/splash-screen';
 
 // Simple function-based approach - no Web Components
@@ -243,7 +249,7 @@ function createBiometricTester() {
     secureCredentialsResult: container.querySelector('#secure-credentials-result'),
     secureServer: container.querySelector('#secure-server'),
     secureUsername: container.querySelector('#secure-username'),
-    securePassword: container.querySelector('#secure-password')
+    securePassword: container.querySelector('#secure-password'),
   };
 
   // Override console.log to capture logs
@@ -268,9 +274,9 @@ function createBiometricTester() {
 
   function addConsoleLog(type, args) {
     const timestamp = new Date().toLocaleTimeString();
-    const message = args.map(arg =>
-      typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-    ).join(' ');
+    const message = args
+      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
+      .join(' ');
 
     elements.consoleLogs.innerHTML += `<div>[${timestamp}] ${type}: ${message}</div>`;
     elements.consoleLogs.scrollTop = elements.consoleLogs.scrollHeight;
@@ -321,7 +327,7 @@ function createBiometricTester() {
       addConsoleLog('INFO', [`Verifying identity (fallback: ${useFallback})...`]);
       await NativeBiometric.verifyIdentity({
         reason: 'Test biometric authentication',
-        useFallback: useFallback
+        useFallback: useFallback,
       });
       addConsoleLog('SUCCESS', ['✅ Identity verified successfully!']);
       showResult(elements.authResult, '✅ Identity verified successfully!', 'success');
@@ -370,9 +376,11 @@ function createBiometricTester() {
         server: server,
       });
       addConsoleLog('SUCCESS', ['✅ Credentials retrieved:', credentials]);
-      showResult(elements.credentialsResult,
+      showResult(
+        elements.credentialsResult,
         `<strong>Retrieved Credentials:</strong><br>Username: ${credentials.username}<br>Password: ${credentials.password}`,
-        'success');
+        'success',
+      );
     } catch (error) {
       addConsoleLog('ERROR', ['Get credentials failed:', error]);
       showResult(elements.credentialsResult, `❌ Get failed: ${error.message || error}`, 'error');
@@ -396,7 +404,11 @@ function createBiometricTester() {
       showResult(elements.credentialsResult, '✅ Credentials deleted successfully!', 'success');
     } catch (error) {
       addConsoleLog('ERROR', ['Delete credentials failed:', error]);
-      showResult(elements.credentialsResult, `❌ Delete failed: ${error.message || error}`, 'error');
+      showResult(
+        elements.credentialsResult,
+        `❌ Delete failed: ${error.message || error}`,
+        'error',
+      );
     }
   }
 
@@ -414,15 +426,19 @@ function createBiometricTester() {
         server: server,
       });
       addConsoleLog('SUCCESS', ['✅ Check completed:', result]);
-      
+
       if (result.isSaved) {
-        showResult(elements.credentialsResult, 
-          `✅ Credentials ARE saved for server: ${server}`, 
-          'success');
+        showResult(
+          elements.credentialsResult,
+          `✅ Credentials ARE saved for server: ${server}`,
+          'success',
+        );
       } else {
-        showResult(elements.credentialsResult, 
-          `ℹ️ No credentials saved for server: ${server}`, 
-          'info');
+        showResult(
+          elements.credentialsResult,
+          `ℹ️ No credentials saved for server: ${server}`,
+          'info',
+        );
       }
     } catch (error) {
       addConsoleLog('ERROR', ['Check credentials failed:', error]);
@@ -449,10 +465,18 @@ function createBiometricTester() {
         accessControl: AccessControl.BIOMETRY_ANY,
       });
       addConsoleLog('SUCCESS', ['✅ Secure credentials saved!']);
-      showResult(elements.secureCredentialsResult, '✅ Secure credentials saved with biometric protection!', 'success');
+      showResult(
+        elements.secureCredentialsResult,
+        '✅ Secure credentials saved with biometric protection!',
+        'success',
+      );
     } catch (error) {
       addConsoleLog('ERROR', ['Set secure credentials failed:', error]);
-      showResult(elements.secureCredentialsResult, `❌ Save failed: ${error.message || error}`, 'error');
+      showResult(
+        elements.secureCredentialsResult,
+        `❌ Save failed: ${error.message || error}`,
+        'error',
+      );
     }
   }
 
@@ -472,12 +496,18 @@ function createBiometricTester() {
         title: 'Access Credentials',
       });
       addConsoleLog('SUCCESS', ['✅ Secure credentials retrieved:', credentials]);
-      showResult(elements.secureCredentialsResult,
+      showResult(
+        elements.secureCredentialsResult,
         `<strong>Retrieved Secure Credentials:</strong><br>Username: ${credentials.username}<br>Password: ${credentials.password}`,
-        'success');
+        'success',
+      );
     } catch (error) {
       addConsoleLog('ERROR', ['Get secure credentials failed:', error]);
-      showResult(elements.secureCredentialsResult, `❌ Get failed: ${error.message || error}`, 'error');
+      showResult(
+        elements.secureCredentialsResult,
+        `❌ Get failed: ${error.message || error}`,
+        'error',
+      );
     }
   }
 
@@ -495,20 +525,22 @@ function createBiometricTester() {
       // Step 1: Simulate successful login
       addConsoleLog('INFO', ['📝 Step 1: Simulating login...']);
       showResult(elements.loginFlowResult, '📝 Step 1: Simulating login...', 'info');
-      
+
       // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
       addConsoleLog('SUCCESS', ['✅ Login successful!']);
 
       // Step 2: Check if biometrics are available
       addConsoleLog('INFO', ['🔍 Step 2: Checking biometric availability...']);
       const result = await NativeBiometric.isAvailable({ useFallback: true });
-      
+
       if (!result.isAvailable) {
         addConsoleLog('INFO', ['ℹ️ Biometrics not available, going to home page directly']);
-        showResult(elements.loginFlowResult, 
-          '✅ Login successful! Biometrics not available, redirecting to home page...', 
-          'success');
+        showResult(
+          elements.loginFlowResult,
+          '✅ Login successful! Biometrics not available, redirecting to home page...',
+          'success',
+        );
         return;
       }
 
@@ -521,29 +553,33 @@ function createBiometricTester() {
       if (checkCredentials.isSaved) {
         // Credentials already saved - go to home page directly
         addConsoleLog('SUCCESS', ['✅ Credentials already saved! Going to home page...']);
-        showResult(elements.loginFlowResult, 
+        showResult(
+          elements.loginFlowResult,
           `✅ Login successful!<br>
           ℹ️ Credentials already saved for ${server}<br>
-          🏠 Redirecting to home page (no popup shown)...`, 
-          'success');
+          🏠 Redirecting to home page (no popup shown)...`,
+          'success',
+        );
       } else {
         // No credentials saved - show save credentials popup
         addConsoleLog('INFO', ['ℹ️ No credentials saved yet']);
-        showResult(elements.loginFlowResult, 
+        showResult(
+          elements.loginFlowResult,
           `✅ Login successful!<br>
           ℹ️ No credentials saved for ${server}<br>
           💾 SHOWING SAVE CREDENTIALS POPUP (in real app, this would be a modal)<br>
           <br>
           <strong>Would you like to save credentials?</strong><br>
           <button class="button" id="save-creds-yes">Yes, Save</button>
-          <button class="button" id="save-creds-no">No, Thanks</button>`, 
-          'info');
+          <button class="button" id="save-creds-no">No, Thanks</button>`,
+          'info',
+        );
 
         // Add event listeners for the popup buttons
         setTimeout(() => {
           const yesBtn = document.getElementById('save-creds-yes');
           const noBtn = document.getElementById('save-creds-no');
-          
+
           if (yesBtn) {
             yesBtn.addEventListener('click', async () => {
               try {
@@ -553,31 +589,41 @@ function createBiometricTester() {
                   server: server,
                 });
                 addConsoleLog('SUCCESS', ['✅ Credentials saved!']);
-                showResult(elements.loginFlowResult, 
-                  '✅ Credentials saved successfully! Redirecting to home page...', 
-                  'success');
+                showResult(
+                  elements.loginFlowResult,
+                  '✅ Credentials saved successfully! Redirecting to home page...',
+                  'success',
+                );
               } catch (error) {
                 addConsoleLog('ERROR', ['❌ Failed to save credentials:', error]);
-                showResult(elements.loginFlowResult, 
-                  `❌ Failed to save credentials: ${error.message || error}`, 
-                  'error');
+                showResult(
+                  elements.loginFlowResult,
+                  `❌ Failed to save credentials: ${error.message || error}`,
+                  'error',
+                );
               }
             });
           }
-          
+
           if (noBtn) {
             noBtn.addEventListener('click', () => {
               addConsoleLog('INFO', ['User declined to save credentials']);
-              showResult(elements.loginFlowResult, 
-                'ℹ️ Credentials not saved. Redirecting to home page...', 
-                'info');
+              showResult(
+                elements.loginFlowResult,
+                'ℹ️ Credentials not saved. Redirecting to home page...',
+                'info',
+              );
             });
           }
         }, 100);
       }
     } catch (error) {
       addConsoleLog('ERROR', ['Login flow failed:', error]);
-      showResult(elements.loginFlowResult, `❌ Login flow error: ${error.message || error}`, 'error');
+      showResult(
+        elements.loginFlowResult,
+        `❌ Login flow error: ${error.message || error}`,
+        'error',
+      );
     }
   }
 
@@ -619,7 +665,7 @@ function createBiometricTester() {
     const names = {
       [AuthenticationStrength.NONE]: 'None',
       [AuthenticationStrength.STRONG]: 'Strong',
-      [AuthenticationStrength.WEAK]: 'Weak'
+      [AuthenticationStrength.WEAK]: 'Weak',
     };
     return names[strength] || 'Unknown';
   }
@@ -628,7 +674,7 @@ function createBiometricTester() {
   console.log('🔍 Biometric Test App initialized. Ready to test!');
 
   // Hide splash screen immediately
-  SplashScreen.hide().catch(err => {
+  SplashScreen.hide().catch((err) => {
     console.log('SplashScreen already hidden or not available:', err.message);
   });
 
@@ -639,3 +685,9 @@ function createBiometricTester() {
 
 // Create and append the tester
 document.body.appendChild(createBiometricTester());
+
+if (Capacitor.isNativePlatform()) {
+  CapacitorUpdater.notifyAppReady().catch((error) => {
+    console.error('Capgo notifyAppReady failed', error);
+  });
+}
