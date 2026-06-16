@@ -21,6 +21,7 @@ import java.security.InvalidKeyException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.ProviderException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.util.Objects;
@@ -212,6 +213,23 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     private void generateSecretKey() throws GeneralSecurityException {
+        try {
+            buildAuthKey(true);
+        } catch (ProviderException e) {
+            // Some OEM Keymaster/TEE implementations (notably Xiaomi/MIUI and Oppo/ColorOS) reject
+            // setInvalidatedByBiometricEnrollment(true) and throw a generic ProviderException
+            // ("Keystore key generation failed"). Retry once without that flag.
+            try {
+                buildAuthKey(false);
+            } catch (ProviderException retryError) {
+                // ProviderException is unchecked and would otherwise crash AuthActivity.onCreate.
+                // Convert it so callers handle it gracefully (return null -> error result).
+                throw new GeneralSecurityException("Keystore key generation failed", retryError);
+            }
+        }
+    }
+
+    private void buildAuthKey(boolean invalidatedByEnrollment) throws GeneralSecurityException {
         KeyGenerator keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
         KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(
             AUTH_KEY_ALIAS,
@@ -230,7 +248,7 @@ public class AuthActivity extends AppCompatActivity {
             builder.setUserAuthenticationValidityDurationSeconds(-1);
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && invalidatedByEnrollment) {
             builder.setInvalidatedByBiometricEnrollment(true);
         }
 
@@ -273,6 +291,26 @@ public class AuthActivity extends AppCompatActivity {
             return (SecretKey) ks.getKey(alias, null);
         }
 
+        boolean invalidatedByEnrollment = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && accessControl == 1;
+        try {
+            return buildCredentialKey(alias, invalidatedByEnrollment);
+        } catch (ProviderException e) {
+            // Xiaomi/MIUI and Oppo/ColorOS Keymasters may reject setInvalidatedByBiometricEnrollment(true)
+            // with a generic ProviderException. Retry without it when it was requested.
+            if (invalidatedByEnrollment) {
+                try {
+                    return buildCredentialKey(alias, false);
+                } catch (ProviderException retryError) {
+                    throw new GeneralSecurityException("Keystore key generation failed", retryError);
+                }
+            }
+            // ProviderException is unchecked; convert it so callers handle it gracefully
+            // (return null -> error result) instead of crashing AuthActivity.onCreate.
+            throw new GeneralSecurityException("Keystore key generation failed", e);
+        }
+    }
+
+    private SecretKey buildCredentialKey(String alias, boolean invalidatedByEnrollment) throws GeneralSecurityException {
         KeyGenerator keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
         KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(
             alias,
@@ -290,7 +328,7 @@ public class AuthActivity extends AppCompatActivity {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            builder.setInvalidatedByBiometricEnrollment(accessControl == 1);
+            builder.setInvalidatedByBiometricEnrollment(invalidatedByEnrollment);
         }
 
         keyGenerator.init(builder.build());
