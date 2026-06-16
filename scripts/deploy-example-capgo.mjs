@@ -46,6 +46,10 @@ function runCapgo(args, allowFailure = false) {
   return result.status ?? 1;
 }
 
+function envFlag(name) {
+  return ['1', 'true', 'yes'].includes((process.env[name] || '').toLowerCase());
+}
+
 const appId = process.env.CAPGO_APP_ID || readConfigString('appId');
 const appName = process.env.CAPGO_APP_NAME || readConfigString('appName', rootPackageJson.name);
 const webDir = process.env.CAPGO_WEB_DIR || readConfigString('webDir', 'dist');
@@ -84,9 +88,13 @@ if (existsSync(iconPath)) {
   appArgs.push('--icon', iconPath);
 }
 
-const setStatus = runCapgo(['app', 'set', ...appArgs], true);
-if (setStatus !== 0) {
-  runCapgo(['app', 'add', ...appArgs]);
+if (envFlag('CAPGO_MANAGE_APP')) {
+  const setStatus = runCapgo(['app', 'set', ...appArgs], true);
+  if (setStatus !== 0) {
+    runCapgo(['app', 'add', ...appArgs]);
+  }
+} else {
+  console.log('Skipping Capgo app metadata management. Set CAPGO_MANAGE_APP=true to enable it.');
 }
 
 console.log(`Deploying ${appId} to Capgo channel "${channel}"`);
