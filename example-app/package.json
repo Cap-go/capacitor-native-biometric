@@ -15,8 +15,8 @@
     "sync": "cap sync",
     "sync:ios": "cap sync ios",
     "sync:android": "cap sync android",
-    "rebuild:ios": "npm run build && cap sync ios",
-    "rebuild:android": "npm run build && cap sync android",
+    "rebuild:ios": "bun run build && bunx cap sync ios",
+    "rebuild:android": "bun run build && bunx cap sync android",
     "capgo:deploy": "cd .. && bun run example:capgo:deploy"
   },
   "dependencies": {
