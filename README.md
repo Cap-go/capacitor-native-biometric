@@ -143,6 +143,20 @@ This plugin does NOT provide:
 
 ## Installation (Only supports Capacitor 7)
 
+You can use our AI-Assisted Setup to install the plugin. Add the Capgo skills to your AI tool using the following command:
+
+```bash
+npx skills add https://github.com/cap-go/capacitor-skills --skill capacitor-plugins
+```
+
+Then use the following prompt:
+
+```text
+Use the `capacitor-plugins` skill from `cap-go/capacitor-skills` to install the `@capgo/capacitor-native-biometric` plugin in my project.
+```
+
+If you prefer Manual Setup, install the plugin by running the following commands and follow the platform-specific instructions below:
+
 - `npm i @capgo/capacitor-native-biometric`
 
 ## Usage
@@ -482,9 +496,9 @@ Result from isAvailable() method indicating biometric authentication availabilit
 
 #### IsAvailableOptions
 
-| Prop              | Type                 | Description                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ----------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`useFallback`** | <code>boolean</code> | Specifies if passcode or device credentials should be considered when biometric authentication is not available. On Android, this can make `isAvailable()` return true when the device has a secure lock screen. The `verifyIdentity()` flow still ignores this option on Android due to BiometricPrompt API constraints: DEVICE_CREDENTIAL authenticator and negative button (cancel) are mutually exclusive. |
+| Prop              | Type                 | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`useFallback`** | <code>boolean</code> | Whether passcode or device credentials should count toward biometric availability when no biometric is enrolled or available. - On iOS, this affects both `isAvailable()` and `verifyIdentity()`. - On Android, this is honored by `isAvailable()` only — the native check computes `fallbackAvailable = useFallback && deviceIsSecure` and reports availability accordingly. The `verifyIdentity()` flow ignores this option on Android due to BiometricPrompt API constraints (DEVICE_CREDENTIAL authenticator and negative button are mutually exclusive); use <a href="#biometricoptions">`BiometricOptions.useFallback`</a> (iOS-only) to control the auth-dialog fallback there. |
 
 
 #### PluginListenerHandle
