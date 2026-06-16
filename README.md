@@ -143,6 +143,20 @@ This plugin does NOT provide:
 
 ## Installation (Only supports Capacitor 7)
 
+You can use our AI-Assisted Setup to install the plugin. Add the Capgo skills to your AI tool using the following command:
+
+```bash
+npx skills add https://github.com/cap-go/capacitor-skills --skill capacitor-plugins
+```
+
+Then use the following prompt:
+
+```text
+Use the `capacitor-plugins` skill from `cap-go/capacitor-skills` to install the `@capgo/capacitor-native-biometric` plugin in my project.
+```
+
+If you prefer Manual Setup, install the plugin by running the following commands and follow the platform-specific instructions below:
+
 - `npm i @capgo/capacitor-native-biometric`
 
 ## Usage
@@ -470,21 +484,21 @@ Get the native Capacitor plugin version.
 
 Result from isAvailable() method indicating biometric authentication availability.
 
-| Prop                            | Type                                                                      | Description                                                                                                                                                                                                 |
-| ------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`isAvailable`**               | <code>boolean</code>                                                      | Whether authentication is available (biometric or fallback if useFallback is true)                                                                                                                          |
-| **`authenticationStrength`**    | <code><a href="#authenticationstrength">AuthenticationStrength</a></code> | The strength of available authentication method (STRONG, WEAK, or NONE)                                                                                                                                     |
-| **`biometryType`**              | <code><a href="#biometrytype">BiometryType</a></code>                     | The primary biometry type available on the device. On Android devices with multiple biometry types, this returns MULTIPLE. Use this for display purposes only - always use isAvailable for logic decisions. |
-| **`deviceIsSecure`**            | <code>boolean</code>                                                      | Whether the device has a secure lock screen (PIN, pattern, or password). This is independent of biometric enrollment.                                                                                       |
-| **`strongBiometryIsAvailable`** | <code>boolean</code>                                                      | Whether strong biometry (Face ID, Touch ID, or fingerprint on devices that consider it strong) is specifically available, separate from weak biometry or device credentials.                                |
-| **`errorCode`**                 | <code><a href="#biometricautherror">BiometricAuthError</a></code>         | Error code from <a href="#biometricautherror">BiometricAuthError</a> enum. Only present when isAvailable is false. Indicates why biometric authentication is not available.                                 |
+| Prop                            | Type                                                                      | Description                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`isAvailable`**               | <code>boolean</code>                                                      | Whether authentication is available. On Android, `verifyIdentity()` uses a `CryptoObject` backed by `BIOMETRIC_STRONG`, so weak-only biometric methods such as some face unlock implementations are reported via `biometryType`/`authenticationStrength` but do not make this value `true`. If `useFallback` is true, PIN/pattern/password can make this value true. |
+| **`authenticationStrength`**    | <code><a href="#authenticationstrength">AuthenticationStrength</a></code> | The strength of available authentication method (STRONG, WEAK, or NONE)                                                                                                                                                                                                                                                                                              |
+| **`biometryType`**              | <code><a href="#biometrytype">BiometryType</a></code>                     | The primary biometry type available on the device. On Android devices with multiple biometry types, this returns MULTIPLE. Use this for display purposes only - always use isAvailable for logic decisions.                                                                                                                                                          |
+| **`deviceIsSecure`**            | <code>boolean</code>                                                      | Whether the device has a secure lock screen (PIN, pattern, or password). This is independent of biometric enrollment.                                                                                                                                                                                                                                                |
+| **`strongBiometryIsAvailable`** | <code>boolean</code>                                                      | Whether strong biometry (Face ID, Touch ID, or fingerprint on devices that consider it strong) is specifically available, separate from weak biometry or device credentials.                                                                                                                                                                                         |
+| **`errorCode`**                 | <code><a href="#biometricautherror">BiometricAuthError</a></code>         | Error code from <a href="#biometricautherror">BiometricAuthError</a> enum. Only present when isAvailable is false. Indicates why biometric authentication is not available.                                                                                                                                                                                          |
 
 
 #### IsAvailableOptions
 
-| Prop              | Type                 | Description                                                                                                                                                                                                                                                                            |
-| ----------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`useFallback`** | <code>boolean</code> | Only for iOS. Specifies if should fallback to passcode authentication if biometric authentication is not available. On Android, this parameter is ignored due to BiometricPrompt API constraints: DEVICE_CREDENTIAL authenticator and negative button (cancel) are mutually exclusive. |
+| Prop              | Type                 | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`useFallback`** | <code>boolean</code> | Whether passcode or device credentials should count toward biometric availability when no biometric is enrolled or available. - On iOS, this affects both `isAvailable()` and `verifyIdentity()`. - On Android, this is honored by `isAvailable()` only — the native check computes `fallbackAvailable = useFallback && deviceIsSecure` and reports availability accordingly. The `verifyIdentity()` flow ignores this option on Android due to BiometricPrompt API constraints (DEVICE_CREDENTIAL authenticator and negative button are mutually exclusive); use <a href="#biometricoptions">`BiometricOptions.useFallback`</a> (iOS-only) to control the auth-dialog fallback there. |
 
 
 #### PluginListenerHandle
