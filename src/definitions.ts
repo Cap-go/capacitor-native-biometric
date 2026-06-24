@@ -174,6 +174,16 @@ export interface SetCredentialOptions {
    * @since 8.4.0
    */
   accessControl?: AccessControl;
+  /**
+   * Title for the biometric prompt.
+   * Only for Android.
+   */
+  title?: string;
+  /**
+   * Text for the negative/cancel button.
+   * Only for Android.
+   */
+  negativeButtonText?: string;
 }
 
 export interface GetSecureCredentialsOptions {
