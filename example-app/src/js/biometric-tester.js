@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import {
   NativeBiometric,
   AuthenticationStrength,
+  BiometryType,
   AccessControl,
 } from '@capgo/capacitor-native-biometric';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -295,6 +296,29 @@ function createBiometricTester() {
   elements.getSecureCredentials.addEventListener('click', getSecureCredentials);
   elements.executeDebug.addEventListener('click', executeDebug);
 
+
+  function getBiometryTypeName(type) {
+    switch (type) {
+      case BiometryType.TOUCH_ID:
+        return 'Touch ID';
+      case BiometryType.FACE_ID:
+        return 'Face ID';
+      case BiometryType.FINGERPRINT:
+        return 'Fingerprint';
+      case BiometryType.FACE_AUTHENTICATION:
+        return 'Face authentication';
+      case BiometryType.IRIS_AUTHENTICATION:
+        return 'Iris authentication';
+      case BiometryType.MULTIPLE:
+        return 'Multiple biometry types';
+      case BiometryType.DEVICE_CREDENTIAL:
+        return 'Device credential (PIN/pattern/password)';
+      case BiometryType.NONE:
+      default:
+        return 'None';
+    }
+  }
+
   // Functions
   async function checkAvailability() {
     try {
@@ -303,18 +327,24 @@ function createBiometricTester() {
       const result = await NativeBiometric.isAvailable({ useFallback });
       addConsoleLog('INFO', ['Availability result:', result]);
 
+      const biometryName = getBiometryTypeName(result.biometryType);
+      const strengthName = getAuthenticationStrengthName(result.authenticationStrength);
+
       if (result.isAvailable) {
-        const strengthName = getAuthenticationStrengthName(result.authenticationStrength);
-        elements.biometricStatus.textContent = `✅ Biometrics Available (${strengthName})`;
+        elements.biometricStatus.textContent = `✅ Biometrics Available (${biometryName}, ${strengthName})`;
         elements.biometricStatus.className = 'status available';
-        elements.biometricInfo.style.display = 'block';
-        elements.biometricInfo.innerHTML = `<strong>Authentication Strength:</strong> ${strengthName} (${result.authenticationStrength})`;
       } else {
-        elements.biometricStatus.textContent = `❌ Biometrics Not Available (Error: ${result.errorCode || 'Unknown'})`;
+        elements.biometricStatus.textContent = `❌ Biometrics Not Available (${biometryName}, ${strengthName})`;
         elements.biometricStatus.className = 'status unavailable';
-        elements.biometricInfo.style.display = 'block';
-        elements.biometricInfo.innerHTML = `<strong>Error Code:</strong> ${result.errorCode || 'Unknown'}`;
       }
+
+      elements.biometricInfo.style.display = 'block';
+      elements.biometricInfo.innerHTML = `
+        <strong>Biometry type:</strong> ${biometryName} (${result.biometryType})<br>
+        <strong>Authentication strength:</strong> ${strengthName} (${result.authenticationStrength})<br>
+        <strong>Strong biometry available:</strong> ${result.strongBiometryIsAvailable ? 'Yes' : 'No'}<br>
+        <strong>Device secure:</strong> ${result.deviceIsSecure ? 'Yes' : 'No'}${result.errorCode !== undefined ? `<br><strong>Error code:</strong> ${result.errorCode}` : ''}
+      `;
     } catch (error) {
       addConsoleLog('ERROR', ['Availability check failed:', error]);
       elements.biometricStatus.textContent = '❌ Check Failed';

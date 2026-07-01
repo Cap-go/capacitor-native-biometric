@@ -34,7 +34,7 @@
   },
   "homepage": "https://capgo.app/docs/plugins/native-biometric/",
   "scripts": {
-    "verify": "bun run verify:ios && bun run verify:android && bun run verify:web",
+    "verify": "bun run check:is-available && bun run verify:ios && bun run verify:android && bun run verify:web",
     "verify:ios": "xcodebuild -scheme CapgoCapacitorNativeBiometric -destination generic/platform=iOS",
     "verify:android": "cd android && ./gradlew clean build test && cd ..",
     "verify:web": "bun run build",
@@ -50,7 +50,8 @@
     "prepublishOnly": "bun run build",
     "check:wiring": "node scripts/check-capacitor-plugin-wiring.mjs",
     "example:install": "cd example-app && bun install --frozen-lockfile",
-    "example:build": "bun run build && cd example-app && bun install --frozen-lockfile && bun run build"
+    "example:build": "bun run build && cd example-app && bun install --frozen-lockfile && bun run build",
+    "check:is-available": "node scripts/check-is-available-result.mjs"
   },
   "devDependencies": {
     "@capacitor/android": "^8.0.0",
