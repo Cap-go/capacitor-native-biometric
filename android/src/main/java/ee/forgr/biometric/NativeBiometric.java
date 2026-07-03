@@ -294,7 +294,7 @@ public class NativeBiometric extends Plugin {
                 negativeButtonText = "Cancel";
             }
             intent.putExtra("negativeButtonText", negativeButtonText);
-            
+
             startActivityForResult(call, intent, "setSecureCredentialsResult");
         } else {
             try {
