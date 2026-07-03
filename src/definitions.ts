@@ -190,7 +190,6 @@ export interface SetCredentialOptions {
    * @since 8.4.14
    */
   negativeButtonText?: string;
-  negativeButtonText?: string;
 }
 
 export interface GetSecureCredentialsOptions {
