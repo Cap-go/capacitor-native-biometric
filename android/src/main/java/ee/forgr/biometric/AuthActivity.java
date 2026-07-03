@@ -585,7 +585,19 @@ public class AuthActivity extends AppCompatActivity {
         throws GeneralSecurityException, IOException {
         SecretKey key = getOrCreateCredentialKey(server, accessControl, authValidityDuration);
         Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
-        cipher.init(Cipher.ENCRYPT_MODE, key);
+        try {
+            cipher.init(Cipher.ENCRYPT_MODE, key);
+        } catch (InvalidKeyException e) {
+            if (e instanceof UserNotAuthenticatedException) {
+                throw e;
+            }
+            // KeyPermanentlyInvalidatedException (biometric enrollment changed) — delete and recreate.
+            KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
+            ks.load(null);
+            ks.deleteEntry(SECURE_KEY_PREFIX + server);
+            key = getOrCreateCredentialKey(server, accessControl, authValidityDuration);
+            cipher.init(Cipher.ENCRYPT_MODE, key);
+        }
         return cipher;
     }
 
@@ -600,7 +612,20 @@ public class AuthActivity extends AppCompatActivity {
 
         SecretKey key = getOrCreateCredentialKey(server, 0, authValidityDuration);
         Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
-        cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
+        try {
+            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
+        } catch (InvalidKeyException e) {
+            if (e instanceof UserNotAuthenticatedException) {
+                throw e;
+            }
+            // Key was invalidated (e.g. biometric enrollment changed). Delete the unusable key
+            // and encrypted data so the user can re-enroll via setSecureCredentials.
+            KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
+            ks.load(null);
+            ks.deleteEntry(SECURE_KEY_PREFIX + server);
+            prefs.edit().remove("secure_" + server).apply();
+            return null;
+        }
         return cipher;
     }
 
