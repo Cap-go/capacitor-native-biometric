@@ -4,7 +4,7 @@ import pkg from './package.json';
 
 const config: CapacitorConfig = {
   appId: 'app.capgo.native.biometric',
-  appName: 'example-app',
+  appName: '@capgo/capacitor-native-biometric',
   webDir: 'dist',
   plugins: {
     SplashScreen: {
