@@ -175,6 +175,28 @@ export interface SetCredentialOptions {
    */
   accessControl?: AccessControl;
   /**
+   * Only for Android. Ignored on iOS and web.
+   * Only meaningful together with `accessControl` set to BIOMETRY_CURRENT_SET or BIOMETRY_ANY.
+   *
+   * Number of seconds a successful biometric authentication remains valid for
+   * Keystore key use. When `0` or omitted (the default), the Keystore key requires
+   * a fresh authentication for every operation — each `getSecureCredentials()` call
+   * shows a `BiometricPrompt` cryptographically bound to that specific read via a
+   * `CryptoObject`. This is the strongest mode: it guarantees no code path can use
+   * the key without a live biometric check.
+   *
+   * When set to a value greater than `0`, one successful biometric authentication
+   * authorizes Keystore key use for that many seconds. Subsequent
+   * `getSecureCredentials()` calls within the window succeed without showing a
+   * prompt. This trades security for convenience: any in-app code that can reach
+   * the decryption call — not just the code path that triggered the prompt — can
+   * silently read the credentials for the remainder of the window.
+   *
+   * @default 0
+   * @since 8.5.0
+   */
+  authValidityDuration?: number;
+  /**
    * Title for the biometric prompt shown while protecting credentials.
    * Only for Android.
    *
