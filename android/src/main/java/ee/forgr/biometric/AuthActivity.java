@@ -8,6 +8,7 @@ import android.os.Handler;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyPermanentlyInvalidatedException;
 import android.security.keystore.KeyProperties;
+import android.security.keystore.UserNotAuthenticatedException;
 import android.util.Base64;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -39,12 +40,14 @@ public class AuthActivity extends AppCompatActivity {
     private static final String SECURE_KEY_PREFIX = "NativeBiometricSecure_";
     private static final int CREDENTIAL_GCM_IV_LENGTH = 12;
     private static final String SHARED_PREFS_NAME = "NativeBiometricSharedPreferences";
+    private static final String SECURE_VALIDITY_SUFFIX = "_validity";
 
     private BiometricPrompt biometricPrompt;
     private Cipher authCipher;
     private String mode;
     private int maxAttempts;
     private int counter = 0;
+    private int authValidityDuration;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,6 +59,22 @@ public class AuthActivity extends AppCompatActivity {
 
         int rawMaxAttempts = getIntent().getIntExtra("maxAttempts", 1);
         maxAttempts = Math.max(1, Math.min(5, rawMaxAttempts));
+
+        String server = getIntent().getStringExtra("server");
+        if ("setSecureCredentials".equals(mode)) {
+            // Not yet persisted — this call establishes the mode for the alias.
+            authValidityDuration = Math.max(0, getIntent().getIntExtra("authValidityDuration", 0));
+        } else if ("getSecureCredentials".equals(mode)) {
+            authValidityDuration = getStoredAuthValidityDuration(server);
+        }
+
+        if (("setSecureCredentials".equals(mode) || "getSecureCredentials".equals(mode)) && authValidityDuration > 0) {
+            // Opt-in validity-window mode: try the Keystore operation without a prompt first.
+            // If the window already covers us, we can finish immediately with no BiometricPrompt.
+            if (tryWithoutPrompt()) {
+                return;
+            }
+        }
 
         Executor executor;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -113,7 +132,14 @@ public class AuthActivity extends AppCompatActivity {
                 @Override
                 public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
                     super.onAuthenticationSucceeded(result);
-                    if ("setSecureCredentials".equals(mode)) {
+                    boolean isValidityWindowMode =
+                        ("setSecureCredentials".equals(mode) || "getSecureCredentials".equals(mode)) && authValidityDuration > 0;
+                    if (isValidityWindowMode) {
+                        // The prompt carries no CryptoObject in this mode (see tryWithoutPrompt) — the
+                        // successful authentication merely unlocks the Keystore key for the validity
+                        // window. Retry the plain cipher operation now that the device is authenticated.
+                        retryAfterPrompt();
+                    } else if ("setSecureCredentials".equals(mode)) {
                         handleSetSecureCredentials(result);
                     } else if ("getSecureCredentials".equals(mode)) {
                         handleGetSecureCredentials(result);
@@ -138,6 +164,13 @@ public class AuthActivity extends AppCompatActivity {
                 }
             }
         );
+
+        if (("setSecureCredentials".equals(mode) || "getSecureCredentials".equals(mode)) && authValidityDuration > 0) {
+            // Validity-window mode: a single authentication unlocks the Keystore key for
+            // `authValidityDuration` seconds, so the prompt is not bound to a CryptoObject.
+            biometricPrompt.authenticate(promptInfo);
+            return;
+        }
 
         BiometricPrompt.CryptoObject cryptoObject;
         if ("setSecureCredentials".equals(mode)) {
@@ -283,34 +316,52 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     private SecretKey getOrCreateCredentialKey(String server, int accessControl) throws GeneralSecurityException, IOException {
+        return getOrCreateCredentialKey(server, accessControl, 0);
+    }
+
+    private SecretKey getOrCreateCredentialKey(String server, int accessControl, int authValidityDuration)
+        throws GeneralSecurityException, IOException {
         String alias = SECURE_KEY_PREFIX + server;
         KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
         ks.load(null);
 
         if (ks.containsAlias(alias)) {
-            return (SecretKey) ks.getKey(alias, null);
+            // If the caller asked for a different auth model than the one the existing key was
+            // generated with (per-operation vs. time-based validity window), the key must be
+            // regenerated so the new setUserAuthenticationParameters() take effect — Keystore
+            // does not allow changing these parameters on an existing key.
+            if (getStoredAuthValidityDuration(server) != authValidityDuration) {
+                ks.deleteEntry(alias);
+            } else {
+                return (SecretKey) ks.getKey(alias, null);
+            }
         }
 
         boolean invalidatedByEnrollment = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && accessControl == 1;
+        SecretKey key;
         try {
-            return buildCredentialKey(alias, invalidatedByEnrollment);
+            key = buildCredentialKey(alias, invalidatedByEnrollment, authValidityDuration);
         } catch (ProviderException e) {
             // Xiaomi/MIUI and Oppo/ColorOS Keymasters may reject setInvalidatedByBiometricEnrollment(true)
             // with a generic ProviderException. Retry without it when it was requested.
             if (invalidatedByEnrollment) {
                 try {
-                    return buildCredentialKey(alias, false);
+                    key = buildCredentialKey(alias, false, authValidityDuration);
                 } catch (ProviderException retryError) {
                     throw new GeneralSecurityException("Keystore key generation failed", retryError);
                 }
+            } else {
+                // ProviderException is unchecked; convert it so callers handle it gracefully
+                // (return null -> error result) instead of crashing AuthActivity.onCreate.
+                throw new GeneralSecurityException("Keystore key generation failed", e);
             }
-            // ProviderException is unchecked; convert it so callers handle it gracefully
-            // (return null -> error result) instead of crashing AuthActivity.onCreate.
-            throw new GeneralSecurityException("Keystore key generation failed", e);
         }
+        storeAuthValidityDuration(server, authValidityDuration);
+        return key;
     }
 
-    private SecretKey buildCredentialKey(String alias, boolean invalidatedByEnrollment) throws GeneralSecurityException {
+    private SecretKey buildCredentialKey(String alias, boolean invalidatedByEnrollment, int authValidityDuration)
+        throws GeneralSecurityException {
         KeyGenerator keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
         KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(
             alias,
@@ -321,7 +372,9 @@ public class AuthActivity extends AppCompatActivity {
             .setUserAuthenticationRequired(true);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            builder.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG);
+            builder.setUserAuthenticationParameters(Math.max(0, authValidityDuration), KeyProperties.AUTH_BIOMETRIC_STRONG);
+        } else if (authValidityDuration > 0) {
+            builder.setUserAuthenticationValidityDurationSeconds(authValidityDuration);
         } else {
             // Use -1 for per-operation authentication, required for BiometricPrompt CryptoObject binding.
             builder.setUserAuthenticationValidityDurationSeconds(-1);
@@ -333,6 +386,17 @@ public class AuthActivity extends AppCompatActivity {
 
         keyGenerator.init(builder.build());
         return keyGenerator.generateKey();
+    }
+
+    private int getStoredAuthValidityDuration(String server) {
+        SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+        return prefs.getInt("secure_" + server + SECURE_VALIDITY_SUFFIX, 0);
+    }
+
+    private void storeAuthValidityDuration(String server, int authValidityDuration) {
+        SharedPreferences.Editor editor = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit();
+        editor.putInt("secure_" + server + SECURE_VALIDITY_SUFFIX, authValidityDuration);
+        editor.apply();
     }
 
     private BiometricPrompt.CryptoObject createCredentialEncryptCryptoObject() {
@@ -390,8 +454,15 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     private void handleSetSecureCredentials(BiometricPrompt.AuthenticationResult result) {
+        encryptAndStoreCredentials(result.getCryptoObject().getCipher());
+    }
+
+    private void handleGetSecureCredentials(BiometricPrompt.AuthenticationResult result) {
+        decryptAndReturnCredentials(result.getCryptoObject().getCipher());
+    }
+
+    private void encryptAndStoreCredentials(Cipher cipher) {
         try {
-            Cipher cipher = result.getCryptoObject().getCipher();
             String username = getIntent().getStringExtra("username");
             String password = getIntent().getStringExtra("password");
             String server = getIntent().getStringExtra("server");
@@ -419,9 +490,8 @@ public class AuthActivity extends AppCompatActivity {
         }
     }
 
-    private void handleGetSecureCredentials(BiometricPrompt.AuthenticationResult result) {
+    private void decryptAndReturnCredentials(Cipher cipher) {
         try {
-            Cipher cipher = result.getCryptoObject().getCipher();
             String server = getIntent().getStringExtra("server");
 
             SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
@@ -448,6 +518,90 @@ public class AuthActivity extends AppCompatActivity {
         } catch (Exception e) {
             finishActivity("error", 0, "Failed to decrypt credentials: " + e.getMessage());
         }
+    }
+
+    /**
+     * Validity-window mode (authValidityDuration > 0): attempt the Keystore cipher operation
+     * directly, with no BiometricPrompt. If a prior authentication is still within the window,
+     * this succeeds immediately and the credential read/write finishes without ever prompting
+     * the user. Returns true if the activity was finished this way (success or a non-auth
+     * error); returns false if a BiometricPrompt is required (window expired or never started),
+     * in which case the caller should continue with the prompt-without-CryptoObject flow.
+     */
+    private boolean tryWithoutPrompt() {
+        try {
+            if ("setSecureCredentials".equals(mode)) {
+                String server = getIntent().getStringExtra("server");
+                int accessControl = getIntent().getIntExtra("accessControl", 2);
+                Cipher cipher = createCredentialCipherForEncrypt(server, accessControl, authValidityDuration);
+                encryptAndStoreCredentials(cipher);
+            } else {
+                String server = getIntent().getStringExtra("server");
+                Cipher cipher = createCredentialCipherForDecrypt(server, authValidityDuration);
+                if (cipher == null) {
+                    finishActivity("error", 21, "No protected credentials found");
+                    return true;
+                }
+                decryptAndReturnCredentials(cipher);
+            }
+            return true;
+        } catch (UserNotAuthenticatedException e) {
+            // Validity window expired (or this is the first use) — a prompt is required.
+            return false;
+        } catch (GeneralSecurityException | IOException e) {
+            finishActivity("error", 0, "Keystore operation failed: " + e.getMessage());
+            return true;
+        }
+    }
+
+    /**
+     * Called after a successful BiometricPrompt shown without a CryptoObject (validity-window
+     * mode). The authentication just performed unlocks the Keystore key for the window, so the
+     * same cipher operation that threw UserNotAuthenticatedException in tryWithoutPrompt() is
+     * now expected to succeed.
+     */
+    private void retryAfterPrompt() {
+        try {
+            if ("setSecureCredentials".equals(mode)) {
+                String server = getIntent().getStringExtra("server");
+                int accessControl = getIntent().getIntExtra("accessControl", 2);
+                Cipher cipher = createCredentialCipherForEncrypt(server, accessControl, authValidityDuration);
+                encryptAndStoreCredentials(cipher);
+            } else {
+                String server = getIntent().getStringExtra("server");
+                Cipher cipher = createCredentialCipherForDecrypt(server, authValidityDuration);
+                if (cipher == null) {
+                    finishActivity("error", 21, "No protected credentials found");
+                    return;
+                }
+                decryptAndReturnCredentials(cipher);
+            }
+        } catch (GeneralSecurityException | IOException e) {
+            finishActivity("error", 0, "Keystore operation failed after authentication: " + e.getMessage());
+        }
+    }
+
+    private Cipher createCredentialCipherForEncrypt(String server, int accessControl, int authValidityDuration)
+        throws GeneralSecurityException, IOException {
+        SecretKey key = getOrCreateCredentialKey(server, accessControl, authValidityDuration);
+        Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
+        cipher.init(Cipher.ENCRYPT_MODE, key);
+        return cipher;
+    }
+
+    private Cipher createCredentialCipherForDecrypt(String server, int authValidityDuration) throws GeneralSecurityException, IOException {
+        SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+        String encryptedData = prefs.getString("secure_" + server, null);
+        if (encryptedData == null) return null;
+
+        byte[] combined = Base64.decode(encryptedData, Base64.DEFAULT);
+        byte[] iv = new byte[CREDENTIAL_GCM_IV_LENGTH];
+        System.arraycopy(combined, 0, iv, 0, CREDENTIAL_GCM_IV_LENGTH);
+
+        SecretKey key = getOrCreateCredentialKey(server, 0, authValidityDuration);
+        Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
+        cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
+        return cipher;
     }
 
     /**

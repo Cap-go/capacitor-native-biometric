@@ -270,6 +270,7 @@ public class NativeBiometric extends Plugin {
         String password = call.getString("password", null);
         String KEY_ALIAS = call.getString("server", null);
         Integer accessControl = call.getInt("accessControl", 0);
+        Integer authValidityDuration = call.getInt("authValidityDuration", 0);
 
         if (username == null || password == null || KEY_ALIAS == null) {
             call.reject("Missing properties");
@@ -283,6 +284,7 @@ public class NativeBiometric extends Plugin {
             intent.putExtra("username", username);
             intent.putExtra("password", password);
             intent.putExtra("accessControl", accessControl);
+            intent.putExtra("authValidityDuration", authValidityDuration != null ? authValidityDuration : 0);
             intent.putExtra("title", "Protect Credentials");
             intent.putExtra("negativeButtonText", "Cancel");
             startActivityForResult(call, intent, "setSecureCredentialsResult");
@@ -430,6 +432,7 @@ public class NativeBiometric extends Plugin {
                 editor.remove(KEY_ALIAS + "-username");
                 editor.remove(KEY_ALIAS + "-password");
                 editor.remove("secure_" + KEY_ALIAS);
+                editor.remove("secure_" + KEY_ALIAS + "_validity");
                 editor.apply();
 
                 try {
