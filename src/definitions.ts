@@ -179,6 +179,7 @@ export interface SetCredentialOptions {
    * Only for Android.
    *
    * @default "Protect Credentials"
+   * @since 8.4.14
    */
   title?: string;
   /**
@@ -186,7 +187,9 @@ export interface SetCredentialOptions {
    * Only for Android.
    *
    * @default "Cancel"
+   * @since 8.4.14
    */
+  negativeButtonText?: string;
   negativeButtonText?: string;
 }
 
