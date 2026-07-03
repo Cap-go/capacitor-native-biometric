@@ -11,6 +11,13 @@ import type {
   DeleteCredentialOptions,
   IsCredentialsSavedOptions,
   IsCredentialsSavedResult,
+  SetDataOptions,
+  GetDataOptions,
+  GetSecureDataOptions,
+  DeleteDataOptions,
+  IsDataSavedOptions,
+  IsDataSavedResult,
+  StoredData,
   Credentials,
   BiometryChangeListener,
 } from './definitions';
@@ -23,6 +30,7 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
    * This is NOT secure storage and should only be used for development purposes.
    */
   private credentialStore: Map<string, Credentials> = new Map();
+  private dataStore: Map<string, string> = new Map();
 
   constructor() {
     super();
@@ -96,6 +104,42 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
     console.log('isCredentialsSaved (dummy implementation)', { server: _options.server });
     // Dummy implementation: check in-memory store
     return Promise.resolve({ isSaved: this.credentialStore.has(_options.server) });
+  }
+
+
+  setData(_options: SetDataOptions): Promise<void> {
+    console.log('setData (dummy implementation)', { key: _options.key });
+    this.dataStore.set(_options.key, _options.value);
+    return Promise.resolve();
+  }
+
+  getData(_options: GetDataOptions): Promise<StoredData> {
+    console.log('getData (dummy implementation)', { key: _options.key });
+    const value = this.dataStore.get(_options.key);
+    if (value === undefined) {
+      throw new Error('No data found for the specified key');
+    }
+    return Promise.resolve({ value });
+  }
+
+  getSecureData(_options: GetSecureDataOptions): Promise<StoredData> {
+    console.log('getSecureData (dummy implementation)', { key: _options.key });
+    const value = this.dataStore.get(_options.key);
+    if (value === undefined) {
+      throw new Error('No protected data found for the specified key');
+    }
+    return Promise.resolve({ value });
+  }
+
+  deleteData(_options: DeleteDataOptions): Promise<void> {
+    console.log('deleteData (dummy implementation)', { key: _options.key });
+    this.dataStore.delete(_options.key);
+    return Promise.resolve();
+  }
+
+  isDataSaved(_options: IsDataSavedOptions): Promise<IsDataSavedResult> {
+    console.log('isDataSaved (dummy implementation)', { key: _options.key });
+    return Promise.resolve({ isSaved: this.dataStore.has(_options.key) });
   }
 
   async getPluginVersion(): Promise<{ version: string }> {

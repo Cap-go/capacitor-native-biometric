@@ -22,6 +22,11 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "deleteCredentials", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getSecureCredentials", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isCredentialsSaved", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setData", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getData", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getSecureData", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "deleteData", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "isDataSaved", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
     ]
 
@@ -297,6 +302,293 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject(error.localizedDescription)
         }
     }
+
+
+    private let dataService = "CapgoNativeBiometricData"
+    private let secureDataService = "CapgoNativeBiometricSecureData"
+
+    private func dataAccount(_ key: String) -> String {
+        return key
+    }
+
+    @objc func setData(_ call: CAPPluginCall) {
+        guard let key = call.getString("key"), let value = call.getString("value") else {
+            call.reject("Missing properties")
+            return
+        }
+
+        let accessControl = call.getInt("accessControl") ?? 0
+
+        if accessControl > 0 {
+            do {
+                try storeProtectedData(value, key, accessControl)
+                call.resolve()
+            } catch KeychainError.duplicateItem {
+                do {
+                    try deleteProtectedData(key)
+                    try storeProtectedData(value, key, accessControl)
+                    call.resolve()
+                } catch {
+                    call.reject(error.localizedDescription)
+                }
+            } catch {
+                call.reject(error.localizedDescription)
+            }
+        } else {
+            do {
+                try storeDataInKeychain(value, key)
+                call.resolve()
+            } catch KeychainError.duplicateItem {
+                do {
+                    try updateDataInKeychain(value, key)
+                    call.resolve()
+                } catch {
+                    call.reject(error.localizedDescription)
+                }
+            } catch {
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    @objc func getData(_ call: CAPPluginCall) {
+        guard let key = call.getString("key") else {
+            call.reject("No key was provided")
+            return
+        }
+
+        do {
+            let value = try getDataFromKeychain(key)
+            var obj = JSObject()
+            obj["value"] = value
+            call.resolve(obj)
+        } catch {
+            call.reject(error.localizedDescription)
+        }
+    }
+
+    @objc func getSecureData(_ call: CAPPluginCall) {
+        guard let key = call.getString("key") else {
+            call.reject("No key was provided")
+            return
+        }
+
+        let context = LAContext()
+        if let reason = call.getString("reason") {
+            context.localizedReason = reason
+        }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: secureDataService,
+            kSecAttrAccount as String: dataAccount(key),
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnAttributes as String: true,
+            kSecReturnData as String: true,
+            kSecUseAuthenticationContext as String: context
+        ]
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            var item: CFTypeRef?
+            let status = SecItemCopyMatching(query as CFDictionary, &item)
+
+            DispatchQueue.main.async {
+                if status == errSecUserCanceled {
+                    call.reject("User canceled biometric authentication", "16")
+                    return
+                }
+                guard status == errSecSuccess else {
+                    if status == errSecItemNotFound {
+                        call.reject("No protected data found for key", "21")
+                    } else if status == errSecAuthFailed {
+                        call.reject("Biometric authentication failed", "10")
+                    } else {
+                        call.reject("Failed to retrieve data: \(status)", "0")
+                    }
+                    return
+                }
+
+                guard let existingItem = item as? [String: Any],
+                      let valueData = existingItem[kSecValueData as String] as? Data,
+                      let value = String(data: valueData, encoding: .utf8)
+                else {
+                    call.reject("Unexpected data format")
+                    return
+                }
+
+                var obj = JSObject()
+                obj["value"] = value
+                call.resolve(obj)
+            }
+        }
+    }
+
+    @objc func deleteData(_ call: CAPPluginCall) {
+        guard let key = call.getString("key") else {
+            call.reject("No key was provided")
+            return
+        }
+
+        do {
+            try deleteDataFromKeychain(key)
+            try deleteProtectedData(key)
+            call.resolve()
+        } catch {
+            call.reject(error.localizedDescription)
+        }
+    }
+
+    @objc func isDataSaved(_ call: CAPPluginCall) {
+        guard let key = call.getString("key") else {
+            call.reject("No key was provided")
+            return
+        }
+
+        var obj = JSObject()
+        obj["isSaved"] = checkDataExist(key) || checkProtectedDataExist(key)
+        call.resolve(obj)
+    }
+
+    func storeDataInKeychain(_ value: String, _ key: String) throws {
+        guard let valueData = value.data(using: .utf8) else {
+            throw KeychainError.unexpectedPasswordData
+        }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: dataService,
+            kSecAttrAccount as String: dataAccount(key),
+            kSecValueData as String: valueData
+        ]
+
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status != errSecDuplicateItem else { throw KeychainError.duplicateItem }
+        guard status == errSecSuccess else { throw KeychainError.unhandledError(status: status) }
+    }
+
+    func updateDataInKeychain(_ value: String, _ key: String) throws {
+        guard let valueData = value.data(using: .utf8) else {
+            throw KeychainError.unexpectedPasswordData
+        }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: dataService,
+            kSecAttrAccount as String: dataAccount(key)
+        ]
+
+        let attributes: [String: Any] = [kSecValueData as String: valueData]
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        guard status == errSecSuccess else { throw KeychainError.unhandledError(status: status) }
+    }
+
+    func getDataFromKeychain(_ key: String) throws -> String {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: dataService,
+            kSecAttrAccount as String: dataAccount(key),
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnAttributes as String: true,
+            kSecReturnData as String: true
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status != errSecItemNotFound else { throw KeychainError.noPassword }
+        guard status == errSecSuccess else { throw KeychainError.unhandledError(status: status) }
+
+        guard let existingItem = item as? [String: Any],
+              let valueData = existingItem[kSecValueData as String] as? Data,
+              let value = String(data: valueData, encoding: .utf8)
+        else {
+            throw KeychainError.unexpectedPasswordData
+        }
+
+        return value
+    }
+
+    func deleteDataFromKeychain(_ key: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: dataService,
+            kSecAttrAccount as String: dataAccount(key)
+        ]
+
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError.unhandledError(status: status)
+        }
+    }
+
+    func storeProtectedData(_ value: String, _ key: String, _ accessControl: Int) throws {
+        guard let valueData = value.data(using: .utf8) else {
+            throw KeychainError.unexpectedPasswordData
+        }
+
+        let flags: SecAccessControlCreateFlags = accessControl == 1 ? .biometryCurrentSet : .biometryAny
+        guard let access = SecAccessControlCreateWithFlags(
+            kCFAllocatorDefault,
+            kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+            flags,
+            nil
+        ) else {
+            throw KeychainError.unhandledError(status: errSecParam)
+        }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: secureDataService,
+            kSecAttrAccount as String: dataAccount(key),
+            kSecValueData as String: valueData,
+            kSecAttrAccessControl as String: access
+        ]
+
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status != errSecDuplicateItem else { throw KeychainError.duplicateItem }
+        guard status == errSecSuccess else { throw KeychainError.unhandledError(status: status) }
+    }
+
+    func deleteProtectedData(_ key: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: secureDataService,
+            kSecAttrAccount as String: dataAccount(key)
+        ]
+
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError.unhandledError(status: status)
+        }
+    }
+
+    func checkDataExist(_ key: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: dataService,
+            kSecAttrAccount as String: dataAccount(key),
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnAttributes as String: true
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        return status == errSecSuccess
+    }
+
+    func checkProtectedDataExist(_ key: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: secureDataService,
+            kSecAttrAccount as String: dataAccount(key),
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnAttributes as String: true
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        return status == errSecSuccess
+    }
+
 
     @objc func isCredentialsSaved(_ call: CAPPluginCall) {
         guard let server = call.getString("server") else {

@@ -299,6 +299,11 @@ This is a plugin specific list of error codes that can be thrown on verifyIdenti
 * [`deleteCredentials(...)`](#deletecredentials)
 * [`getSecureCredentials(...)`](#getsecurecredentials)
 * [`isCredentialsSaved(...)`](#iscredentialssaved)
+* [`setData(...)`](#setdata)
+* [`getData(...)`](#getdata)
+* [`getSecureData(...)`](#getsecuredata)
+* [`deleteData(...)`](#deletedata)
+* [`isDataSaved(...)`](#isdatasaved)
 * [`getPluginVersion()`](#getpluginversion)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
@@ -462,6 +467,104 @@ Checks if credentials are already saved for a given server.
 --------------------
 
 
+### setData(...)
+
+```typescript
+setData(options: SetDataOptions) => Promise<void>
+```
+
+Stores an arbitrary string value under the given key.
+Values are encrypted at rest using the platform secure storage backend
+(Android Keystore + SharedPreferences, iOS Keychain).
+
+For biometric-protected storage, set `accessControl` and retrieve the value
+with `getSecureData()`. Credential helpers remain available for username/password flows.
+
+| Param         | Type                                                      |
+| ------------- | --------------------------------------------------------- |
+| **`options`** | <code><a href="#setdataoptions">SetDataOptions</a></code> |
+
+**Since:** 8.6.0
+
+--------------------
+
+
+### getData(...)
+
+```typescript
+getData(options: GetDataOptions) => Promise<StoredData>
+```
+
+Gets a previously stored value for the given key.
+Only returns values stored without biometric `accessControl`.
+
+| Param         | Type                                                      |
+| ------------- | --------------------------------------------------------- |
+| **`options`** | <code><a href="#getdataoptions">GetDataOptions</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#storeddata">StoredData</a>&gt;</code>
+
+**Since:** 8.6.0
+
+--------------------
+
+
+### getSecureData(...)
+
+```typescript
+getSecureData(options: GetSecureDataOptions) => Promise<StoredData>
+```
+
+Gets a biometric-protected value for the given key.
+The value must have been stored with `accessControl` set to BIOMETRY_CURRENT_SET or BIOMETRY_ANY.
+
+| Param         | Type                                                                  |
+| ------------- | --------------------------------------------------------------------- |
+| **`options`** | <code><a href="#getsecuredataoptions">GetSecureDataOptions</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#storeddata">StoredData</a>&gt;</code>
+
+**Since:** 8.6.0
+
+--------------------
+
+
+### deleteData(...)
+
+```typescript
+deleteData(options: DeleteDataOptions) => Promise<void>
+```
+
+Deletes the stored value for the given key (protected and unprotected).
+
+| Param         | Type                                                            |
+| ------------- | --------------------------------------------------------------- |
+| **`options`** | <code><a href="#deletedataoptions">DeleteDataOptions</a></code> |
+
+**Since:** 8.6.0
+
+--------------------
+
+
+### isDataSaved(...)
+
+```typescript
+isDataSaved(options: IsDataSavedOptions) => Promise<IsDataSavedResult>
+```
+
+Checks whether a value is already saved for the given key.
+
+| Param         | Type                                                              |
+| ------------- | ----------------------------------------------------------------- |
+| **`options`** | <code><a href="#isdatasavedoptions">IsDataSavedOptions</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#isdatasavedresult">IsDataSavedResult</a>&gt;</code>
+
+**Since:** 8.6.0
+
+--------------------
+
+
 ### getPluginVersion()
 
 ```typescript
@@ -582,6 +685,65 @@ Result from isAvailable() method indicating biometric authentication availabilit
 | Prop         | Type                |
 | ------------ | ------------------- |
 | **`server`** | <code>string</code> |
+
+
+#### SetDataOptions
+
+| Prop                       | Type                                                    | Description                                                                                                                                                                                                                                                         | Default                         | Since |
+| -------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ----- |
+| **`key`**                  | <code>string</code>                                     | Unique identifier for the stored value. Use a stable app-specific namespace (e.g. `pin`, `session.token`).                                                                                                                                                          |                                 |       |
+| **`value`**                | <code>string</code>                                     | Arbitrary string payload. Serialize objects with `JSON.stringify()` before storing. Platform limits apply: Android Keystore-backed encryption works best with payloads under ~8 KB; iOS Keychain practical limits are higher but very large values are discouraged. |                                 |       |
+| **`accessControl`**        | <code><a href="#accesscontrol">AccessControl</a></code> | Access control level for the stored value. When set to BIOMETRY_CURRENT_SET or BIOMETRY_ANY, the value is hardware-protected and requires biometric authentication to access via `getSecureData()`.                                                                 | <code>AccessControl.NONE</code> | 8.6.0 |
+| **`authValidityDuration`** | <code>number</code>                                     | Only for Android. Ignored on iOS and web. Only meaningful together with `accessControl` set to BIOMETRY_CURRENT_SET or BIOMETRY_ANY.                                                                                                                                | <code>0</code>                  | 8.6.0 |
+| **`title`**                | <code>string</code>                                     | Title for the biometric prompt shown while protecting data. Only for Android.                                                                                                                                                                                       | <code>"Protect Data"</code>     | 8.6.0 |
+| **`negativeButtonText`**   | <code>string</code>                                     | Text for the negative/cancel button in the biometric prompt. Only for Android.                                                                                                                                                                                      | <code>"Cancel"</code>           | 8.6.0 |
+
+
+#### StoredData
+
+| Prop        | Type                |
+| ----------- | ------------------- |
+| **`value`** | <code>string</code> |
+
+
+#### GetDataOptions
+
+| Prop      | Type                |
+| --------- | ------------------- |
+| **`key`** | <code>string</code> |
+
+
+#### GetSecureDataOptions
+
+| Prop                     | Type                | Description                                                                                                |
+| ------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **`key`**                | <code>string</code> |                                                                                                            |
+| **`reason`**             | <code>string</code> | Reason for requesting biometric authentication. Displayed in the biometric prompt on both iOS and Android. |
+| **`title`**              | <code>string</code> | Title for the biometric prompt. Only for Android.                                                          |
+| **`subtitle`**           | <code>string</code> | Subtitle for the biometric prompt. Only for Android.                                                       |
+| **`description`**        | <code>string</code> | Description for the biometric prompt. Only for Android.                                                    |
+| **`negativeButtonText`** | <code>string</code> | Text for the negative/cancel button. Only for Android.                                                     |
+
+
+#### DeleteDataOptions
+
+| Prop      | Type                |
+| --------- | ------------------- |
+| **`key`** | <code>string</code> |
+
+
+#### IsDataSavedResult
+
+| Prop          | Type                 |
+| ------------- | -------------------- |
+| **`isSaved`** | <code>boolean</code> |
+
+
+#### IsDataSavedOptions
+
+| Prop      | Type                |
+| --------- | ------------------- |
+| **`key`** | <code>string</code> |
 
 
 ### Type Aliases

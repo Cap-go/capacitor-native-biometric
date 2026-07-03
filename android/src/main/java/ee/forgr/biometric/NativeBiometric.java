@@ -78,6 +78,8 @@ public class NativeBiometric extends Plugin {
     private static final int GCM_IV_LENGTH = 12;
     private static final String ENCRYPTED_KEY = "NativeBiometricKey";
     private static final String NATIVE_BIOMETRIC_SHARED_PREFERENCES = "NativeBiometricSharedPreferences";
+    private static final String DATA_KEY_PREFIX = "data_";
+    private static final String DATA_KEYSTORE_PREFIX = "NativeBiometricData_";
 
     private SharedPreferences encryptedSharedPreferences;
 
@@ -481,6 +483,210 @@ public class NativeBiometric extends Plugin {
             call.resolve(ret);
         } else {
             call.reject("No server name was provided");
+        }
+    }
+
+
+    private String dataStorageKey(String key) {
+        return DATA_KEY_PREFIX + key;
+    }
+
+    private String dataKeyAlias(String key) {
+        return DATA_KEYSTORE_PREFIX + key;
+    }
+
+
+    @PluginMethod
+    public void setData(final PluginCall call) {
+        String key = call.getString("key", null);
+        String value = call.getString("value", null);
+        Integer accessControl = call.getInt("accessControl", 0);
+        Integer authValidityDuration = call.getInt("authValidityDuration", 0);
+
+        if (key == null || value == null) {
+            call.reject("Missing properties");
+            return;
+        }
+
+        String storageKey = dataStorageKey(key);
+
+        if (accessControl != null && accessControl > 0) {
+            Intent intent = new Intent(getContext(), AuthActivity.class);
+            intent.putExtra("mode", "setSecureData");
+            intent.putExtra("server", storageKey);
+            intent.putExtra("value", value);
+            intent.putExtra("accessControl", accessControl);
+            intent.putExtra("authValidityDuration", authValidityDuration != null ? authValidityDuration : 0);
+
+            String title = call.getString("title", "Protect Data");
+            if (title == null || title.trim().isEmpty()) {
+                title = "Protect Data";
+            }
+            intent.putExtra("title", title);
+
+            String negativeButtonText = call.getString("negativeButtonText", "Cancel");
+            if (negativeButtonText == null || negativeButtonText.trim().isEmpty()) {
+                negativeButtonText = "Cancel";
+            }
+            intent.putExtra("negativeButtonText", negativeButtonText);
+
+            startActivityForResult(call, intent, "setSecureDataResult");
+        } else {
+            try {
+                SharedPreferences.Editor editor = getContext()
+                    .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE)
+                    .edit();
+                editor.putString(storageKey, encryptString(value, dataKeyAlias(key)));
+                editor.apply();
+                call.resolve();
+            } catch (GeneralSecurityException | IOException e) {
+                call.reject("Failed to save data", e);
+            }
+        }
+    }
+
+    @PluginMethod
+    public void getData(final PluginCall call) {
+        String key = call.getString("key", null);
+        if (key == null) {
+            call.reject("No key was provided");
+            return;
+        }
+
+        String storageKey = dataStorageKey(key);
+        SharedPreferences sharedPreferences = getContext().getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE);
+        String encryptedValue = sharedPreferences.getString(storageKey, null);
+
+        if (encryptedValue == null) {
+            call.reject("No data found");
+            return;
+        }
+
+        try {
+            JSObject jsObject = new JSObject();
+            jsObject.put("value", decryptString(encryptedValue, dataKeyAlias(key)));
+            call.resolve(jsObject);
+        } catch (GeneralSecurityException | IOException e) {
+            call.reject("Failed to get data");
+        }
+    }
+
+    @PluginMethod
+    public void getSecureData(final PluginCall call) {
+        String key = call.getString("key", null);
+        if (key == null) {
+            call.reject("No key was provided");
+            return;
+        }
+
+        String storageKey = dataStorageKey(key);
+        SharedPreferences sharedPreferences = getContext().getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE);
+        String encryptedData = sharedPreferences.getString("secure_" + storageKey, null);
+        if (encryptedData == null) {
+            call.reject("No protected data found", "21");
+            return;
+        }
+
+        Intent intent = new Intent(getContext(), AuthActivity.class);
+        intent.putExtra("mode", "getSecureData");
+        intent.putExtra("server", storageKey);
+        intent.putExtra("title", call.getString("title", "Authenticate"));
+
+        String subtitle = call.getString("subtitle");
+        if (subtitle != null) intent.putExtra("subtitle", subtitle);
+        String description = call.getString("description");
+        if (description != null) intent.putExtra("description", description);
+        String negativeText = call.getString("negativeButtonText");
+        if (negativeText != null) intent.putExtra("negativeButtonText", negativeText);
+
+        startActivityForResult(call, intent, "getSecureDataResult");
+    }
+
+    @PluginMethod
+    public void deleteData(final PluginCall call) {
+        String key = call.getString("key", null);
+        if (key == null) {
+            call.reject("No key was provided");
+            return;
+        }
+
+        String storageKey = dataStorageKey(key);
+        String keyAlias = dataKeyAlias(key);
+
+        try {
+            getKeyStore().deleteEntry(keyAlias);
+            SharedPreferences.Editor editor = getContext()
+                .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE)
+                .edit();
+            editor.remove(storageKey);
+            editor.remove("secure_" + storageKey);
+            editor.remove("secure_" + storageKey + "_validity");
+            editor.apply();
+
+            try {
+                getKeyStore().deleteEntry("NativeBiometricSecure_" + storageKey);
+            } catch (KeyStoreException e) {
+                // Ignore — may not exist
+            }
+
+            call.resolve();
+        } catch (KeyStoreException | CertificateException | NoSuchAlgorithmException | IOException e) {
+            call.reject("Failed to delete data", e);
+        }
+    }
+
+    @PluginMethod
+    public void isDataSaved(final PluginCall call) {
+        String key = call.getString("key", null);
+        if (key == null) {
+            call.reject("No key was provided");
+            return;
+        }
+
+        String storageKey = dataStorageKey(key);
+        SharedPreferences sharedPreferences = getContext().getSharedPreferences(
+            NATIVE_BIOMETRIC_SHARED_PREFERENCES,
+            Context.MODE_PRIVATE
+        );
+        boolean hasUnprotected = sharedPreferences.getString(storageKey, null) != null;
+        boolean hasProtected = sharedPreferences.getString("secure_" + storageKey, null) != null;
+
+        JSObject ret = new JSObject();
+        ret.put("isSaved", hasUnprotected || hasProtected);
+        call.resolve(ret);
+    }
+
+    @ActivityCallback
+    private void setSecureDataResult(PluginCall call, ActivityResult result) {
+        if (result.getResultCode() == Activity.RESULT_OK) {
+            Intent data = result.getData();
+            if (data != null && "success".equals(data.getStringExtra("result"))) {
+                call.resolve();
+            } else {
+                String errorCode = data != null ? data.getStringExtra("errorCode") : "0";
+                String errorDetails = data != null ? data.getStringExtra("errorDetails") : "Failed to store data";
+                call.reject(errorDetails, errorCode);
+            }
+        } else {
+            call.reject("Failed to store data");
+        }
+    }
+
+    @ActivityCallback
+    private void getSecureDataResult(PluginCall call, ActivityResult result) {
+        if (result.getResultCode() == Activity.RESULT_OK) {
+            Intent data = result.getData();
+            if (data != null && "success".equals(data.getStringExtra("result"))) {
+                JSObject jsObject = new JSObject();
+                jsObject.put("value", data.getStringExtra("value"));
+                call.resolve(jsObject);
+            } else {
+                String errorCode = data != null ? data.getStringExtra("errorCode") : "0";
+                String errorDetails = data != null ? data.getStringExtra("errorDetails") : "Authentication failed";
+                call.reject(errorDetails, errorCode);
+            }
+        } else {
+            call.reject("Authentication failed");
         }
     }
 
