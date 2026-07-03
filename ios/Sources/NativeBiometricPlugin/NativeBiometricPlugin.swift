@@ -303,7 +303,6 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-
     private let dataService = "CapgoNativeBiometricData"
     private let secureDataService = "CapgoNativeBiometricSecureData"
 
@@ -588,7 +587,6 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         return status == errSecSuccess
     }
-
 
     @objc func isCredentialsSaved(_ call: CAPPluginCall) {
         guard let server = call.getString("server") else {

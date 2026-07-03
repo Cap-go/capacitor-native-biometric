@@ -106,7 +106,6 @@ export class NativeBiometricWeb extends WebPlugin implements NativeBiometricPlug
     return Promise.resolve({ isSaved: this.credentialStore.has(_options.server) });
   }
 
-
   setData(_options: SetDataOptions): Promise<void> {
     console.log('setData (dummy implementation)', { key: _options.key });
     this.dataStore.set(_options.key, _options.value);

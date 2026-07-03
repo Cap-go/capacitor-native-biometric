@@ -50,10 +50,12 @@ public class AuthActivity extends AppCompatActivity {
     private int authValidityDuration;
 
     private boolean isSecureStorageMode() {
-        return "setSecureCredentials".equals(mode)
-            || "getSecureCredentials".equals(mode)
-            || "setSecureData".equals(mode)
-            || "getSecureData".equals(mode);
+        return (
+            "setSecureCredentials".equals(mode) ||
+            "getSecureCredentials".equals(mode) ||
+            "setSecureData".equals(mode) ||
+            "getSecureData".equals(mode)
+        );
     }
 
     private boolean isSecureWriteMode() {
@@ -63,7 +65,6 @@ public class AuthActivity extends AppCompatActivity {
     private boolean isSecureReadMode() {
         return "getSecureCredentials".equals(mode) || "getSecureData".equals(mode);
     }
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -148,8 +149,7 @@ public class AuthActivity extends AppCompatActivity {
                 @Override
                 public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
                     super.onAuthenticationSucceeded(result);
-                    boolean isValidityWindowMode =
-                        isSecureStorageMode() && authValidityDuration > 0;
+                    boolean isValidityWindowMode = isSecureStorageMode() && authValidityDuration > 0;
                     if (isValidityWindowMode) {
                         // The prompt carries no CryptoObject in this mode (see tryWithoutPrompt) — the
                         // successful authentication merely unlocks the Keystore key for the validity

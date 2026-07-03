@@ -486,7 +486,6 @@ public class NativeBiometric extends Plugin {
         }
     }
 
-
     private String dataStorageKey(String key) {
         return DATA_KEY_PREFIX + key;
     }
@@ -494,7 +493,6 @@ public class NativeBiometric extends Plugin {
     private String dataKeyAlias(String key) {
         return DATA_KEYSTORE_PREFIX + key;
     }
-
 
     @PluginMethod
     public void setData(final PluginCall call) {
@@ -644,10 +642,7 @@ public class NativeBiometric extends Plugin {
         }
 
         String storageKey = dataStorageKey(key);
-        SharedPreferences sharedPreferences = getContext().getSharedPreferences(
-            NATIVE_BIOMETRIC_SHARED_PREFERENCES,
-            Context.MODE_PRIVATE
-        );
+        SharedPreferences sharedPreferences = getContext().getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE);
         boolean hasUnprotected = sharedPreferences.getString(storageKey, null) != null;
         boolean hasProtected = sharedPreferences.getString("secure_" + storageKey, null) != null;
 

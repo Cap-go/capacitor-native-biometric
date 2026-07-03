@@ -351,7 +351,6 @@ export interface IsDataSavedResult {
   isSaved: boolean;
 }
 
-
 /**
  * Biometric authentication error codes.
  * These error codes are used in both isAvailable() and verifyIdentity() methods.
