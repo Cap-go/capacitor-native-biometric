@@ -196,6 +196,22 @@ export interface SetCredentialOptions {
    * @since 8.5.0
    */
   authValidityDuration?: number;
+  /**
+   * Title for the biometric prompt shown while protecting credentials.
+   * Only for Android.
+   *
+   * @default "Protect Credentials"
+   * @since 8.4.14
+   */
+  title?: string;
+  /**
+   * Text for the negative/cancel button in the biometric prompt.
+   * Only for Android.
+   *
+   * @default "Cancel"
+   * @since 8.4.14
+   */
+  negativeButtonText?: string;
 }
 
 export interface GetSecureCredentialsOptions {
