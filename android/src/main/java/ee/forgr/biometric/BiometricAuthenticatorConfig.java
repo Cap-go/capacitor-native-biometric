@@ -91,12 +91,7 @@ public final class BiometricAuthenticatorConfig {
         boolean allowNegative = !hasDeviceCredential;
         boolean deviceCredentialOnly = hasDeviceCredential && !hasBiometric;
 
-        return new BiometricAuthenticatorConfig(
-            promptAuth,
-            keyAuth > 0 ? keyAuth : keyAuthAny(),
-            allowNegative,
-            !deviceCredentialOnly
-        );
+        return new BiometricAuthenticatorConfig(promptAuth, keyAuth > 0 ? keyAuth : keyAuthAny(), allowNegative, !deviceCredentialOnly);
     }
 
     private static BiometricAuthenticatorConfig defaultBiometric() {
