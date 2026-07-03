@@ -130,8 +130,9 @@ public class NativeBiometric extends Plugin {
             authenticationStrength = AUTH_STRENGTH_STRONG;
             isAvailable = true;
         } else if (hasWeakBiometric) {
+            // Weak-only biometrics (e.g. some face unlock) are reported for UX via
+            // biometryType/authenticationStrength but do not enable verifyIdentity().
             authenticationStrength = AUTH_STRENGTH_WEAK;
-            isAvailable = true;
         } else if (fallbackAvailable) {
             authenticationStrength = AUTH_STRENGTH_WEAK;
             isAvailable = true;
@@ -428,7 +429,9 @@ public class NativeBiometric extends Plugin {
                 SharedPreferences.Editor editor = getContext()
                     .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE)
                     .edit();
-                editor.clear();
+                editor.remove(KEY_ALIAS + "-username");
+                editor.remove(KEY_ALIAS + "-password");
+                editor.remove("secure_" + KEY_ALIAS);
                 editor.apply();
 
                 try {
