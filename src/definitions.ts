@@ -175,13 +175,17 @@ export interface SetCredentialOptions {
    */
   accessControl?: AccessControl;
   /**
-   * Title for the biometric prompt.
+   * Title for the biometric prompt shown while protecting credentials.
    * Only for Android.
+   *
+   * @default "Protect Credentials"
    */
   title?: string;
   /**
-   * Text for the negative/cancel button.
+   * Text for the negative/cancel button in the biometric prompt.
    * Only for Android.
+   *
+   * @default "Cancel"
    */
   negativeButtonText?: string;
 }
