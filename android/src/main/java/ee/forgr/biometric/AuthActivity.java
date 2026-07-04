@@ -56,6 +56,23 @@ public class AuthActivity extends AppCompatActivity {
     private static final int KEY_AUTH_BIOMETRIC_WEAK = 2;
     private static final int KEY_AUTH_DEVICE_CREDENTIAL = 4;
 
+    private boolean isSecureStorageMode() {
+        return (
+            "setSecureCredentials".equals(mode) ||
+            "getSecureCredentials".equals(mode) ||
+            "setSecureData".equals(mode) ||
+            "getSecureData".equals(mode)
+        );
+    }
+
+    private boolean isSecureWriteMode() {
+        return "setSecureCredentials".equals(mode) || "setSecureData".equals(mode);
+    }
+
+    private boolean isSecureReadMode() {
+        return "getSecureCredentials".equals(mode) || "getSecureData".equals(mode);
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -68,14 +85,14 @@ public class AuthActivity extends AppCompatActivity {
         maxAttempts = Math.max(1, Math.min(5, rawMaxAttempts));
 
         String server = getIntent().getStringExtra("server");
-        if ("setSecureCredentials".equals(mode)) {
+        if ("setSecureCredentials".equals(mode) || "setSecureData".equals(mode)) {
             // Not yet persisted — this call establishes the mode for the alias.
             authValidityDuration = Math.max(0, getIntent().getIntExtra("authValidityDuration", 0));
-        } else if ("getSecureCredentials".equals(mode)) {
+        } else if ("getSecureCredentials".equals(mode) || "getSecureData".equals(mode)) {
             authValidityDuration = getStoredAuthValidityDuration(server);
         }
 
-        if (("setSecureCredentials".equals(mode) || "getSecureCredentials".equals(mode)) && authValidityDuration > 0) {
+        if (isSecureStorageMode() && authValidityDuration > 0) {
             // Opt-in validity-window mode: try the Keystore operation without a prompt first.
             // If the window already covers us, we can finish immediately with no BiometricPrompt.
             if (tryWithoutPrompt()) {
@@ -131,16 +148,15 @@ public class AuthActivity extends AppCompatActivity {
                 @Override
                 public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
                     super.onAuthenticationSucceeded(result);
-                    boolean isValidityWindowMode =
-                        ("setSecureCredentials".equals(mode) || "getSecureCredentials".equals(mode)) && authValidityDuration > 0;
+                    boolean isValidityWindowMode = isSecureStorageMode() && authValidityDuration > 0;
                     if (isValidityWindowMode) {
                         // The prompt carries no CryptoObject in this mode (see tryWithoutPrompt) — the
                         // successful authentication merely unlocks the Keystore key for the validity
                         // window. Retry the plain cipher operation now that the device is authenticated.
                         retryAfterPrompt();
-                    } else if ("setSecureCredentials".equals(mode)) {
+                    } else if ("setSecureCredentials".equals(mode) || "setSecureData".equals(mode)) {
                         handleSetSecureCredentials(result);
-                    } else if ("getSecureCredentials".equals(mode)) {
+                    } else if ("getSecureCredentials".equals(mode) || "getSecureData".equals(mode)) {
                         handleGetSecureCredentials(result);
                     } else if (authenticatorConfig.requiresCryptoObject) {
                         if (!validateCryptoObject(result)) {
@@ -166,7 +182,7 @@ public class AuthActivity extends AppCompatActivity {
             }
         );
 
-        if (("setSecureCredentials".equals(mode) || "getSecureCredentials".equals(mode)) && authValidityDuration > 0) {
+        if (isSecureStorageMode() && authValidityDuration > 0) {
             // Validity-window mode: a single authentication unlocks the Keystore key for
             // `authValidityDuration` seconds, so the prompt is not bound to a CryptoObject.
             biometricPrompt.authenticate(promptInfo);
@@ -179,9 +195,9 @@ public class AuthActivity extends AppCompatActivity {
         }
 
         BiometricPrompt.CryptoObject cryptoObject;
-        if ("setSecureCredentials".equals(mode)) {
+        if ("setSecureCredentials".equals(mode) || "setSecureData".equals(mode)) {
             cryptoObject = createCredentialEncryptCryptoObject();
-        } else if ("getSecureCredentials".equals(mode)) {
+        } else if ("getSecureCredentials".equals(mode) || "getSecureData".equals(mode)) {
             cryptoObject = createCredentialDecryptCryptoObject();
         } else {
             cryptoObject = createCryptoObject();
@@ -480,15 +496,21 @@ public class AuthActivity extends AppCompatActivity {
 
     private void encryptAndStoreCredentials(Cipher cipher) {
         try {
-            String username = getIntent().getStringExtra("username");
-            String password = getIntent().getStringExtra("password");
             String server = getIntent().getStringExtra("server");
+            byte[] plaintext;
+            if ("setSecureData".equals(mode)) {
+                String value = getIntent().getStringExtra("value");
+                plaintext = value.getBytes(StandardCharsets.UTF_8);
+            } else {
+                String username = getIntent().getStringExtra("username");
+                String password = getIntent().getStringExtra("password");
+                JSONObject json = new JSONObject();
+                json.put("u", username);
+                json.put("p", password);
+                plaintext = json.toString().getBytes(StandardCharsets.UTF_8);
+            }
 
-            JSONObject json = new JSONObject();
-            json.put("u", username);
-            json.put("p", password);
-
-            byte[] encrypted = cipher.doFinal(json.toString().getBytes(StandardCharsets.UTF_8));
+            byte[] encrypted = cipher.doFinal(plaintext);
             byte[] iv = cipher.getIV();
 
             byte[] combined = new byte[iv.length + encrypted.length];
@@ -523,13 +545,16 @@ public class AuthActivity extends AppCompatActivity {
             System.arraycopy(combined, CREDENTIAL_GCM_IV_LENGTH, ciphertext, 0, ciphertext.length);
 
             byte[] decrypted = cipher.doFinal(ciphertext);
-            String jsonStr = new String(decrypted, StandardCharsets.UTF_8);
-            JSONObject json = new JSONObject(jsonStr);
-
             Intent intent = new Intent();
             intent.putExtra("result", "success");
-            intent.putExtra("username", json.getString("u"));
-            intent.putExtra("password", json.getString("p"));
+            if ("getSecureData".equals(mode)) {
+                intent.putExtra("value", new String(decrypted, StandardCharsets.UTF_8));
+            } else {
+                String jsonStr = new String(decrypted, StandardCharsets.UTF_8);
+                JSONObject json = new JSONObject(jsonStr);
+                intent.putExtra("username", json.getString("u"));
+                intent.putExtra("password", json.getString("p"));
+            }
             setResult(RESULT_OK, intent);
             finish();
         } catch (Exception e) {
@@ -547,7 +572,7 @@ public class AuthActivity extends AppCompatActivity {
      */
     private boolean tryWithoutPrompt() {
         try {
-            if ("setSecureCredentials".equals(mode)) {
+            if (isSecureWriteMode()) {
                 String server = getIntent().getStringExtra("server");
                 int accessControl = getIntent().getIntExtra("accessControl", 2);
                 Cipher cipher = createCredentialCipherForEncrypt(server, accessControl, authValidityDuration);
@@ -579,7 +604,7 @@ public class AuthActivity extends AppCompatActivity {
      */
     private void retryAfterPrompt() {
         try {
-            if ("setSecureCredentials".equals(mode)) {
+            if (isSecureWriteMode()) {
                 String server = getIntent().getStringExtra("server");
                 int accessControl = getIntent().getIntExtra("accessControl", 2);
                 Cipher cipher = createCredentialCipherForEncrypt(server, accessControl, authValidityDuration);

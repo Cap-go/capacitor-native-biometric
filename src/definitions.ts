@@ -256,6 +256,102 @@ export interface IsCredentialsSavedOptions {
 export interface IsCredentialsSavedResult {
   isSaved: boolean;
 }
+export interface SetDataOptions {
+  /**
+   * Unique identifier for the stored value.
+   * Use a stable app-specific namespace (e.g. `pin`, `session.token`).
+   */
+  key: string;
+  /**
+   * Arbitrary string payload. Serialize objects with `JSON.stringify()` before storing.
+   *
+   * Platform limits apply: Android Keystore-backed encryption works best with payloads
+   * under ~8 KB; iOS Keychain practical limits are higher but very large values are discouraged.
+   */
+  value: string;
+  /**
+   * Access control level for the stored value.
+   * When set to BIOMETRY_CURRENT_SET or BIOMETRY_ANY, the value is hardware-protected
+   * and requires biometric authentication to access via `getSecureData()`.
+   *
+   * @default AccessControl.NONE
+   * @since 8.6.0
+   */
+  accessControl?: AccessControl;
+  /**
+   * Only for Android. Ignored on iOS and web.
+   * Only meaningful together with `accessControl` set to BIOMETRY_CURRENT_SET or BIOMETRY_ANY.
+   *
+   * @default 0
+   * @since 8.6.0
+   */
+  authValidityDuration?: number;
+  /**
+   * Title for the biometric prompt shown while protecting data.
+   * Only for Android.
+   *
+   * @default "Protect Data"
+   * @since 8.6.0
+   */
+  title?: string;
+  /**
+   * Text for the negative/cancel button in the biometric prompt.
+   * Only for Android.
+   *
+   * @default "Cancel"
+   * @since 8.6.0
+   */
+  negativeButtonText?: string;
+}
+
+export interface GetDataOptions {
+  key: string;
+}
+
+export interface GetSecureDataOptions {
+  key: string;
+  /**
+   * Reason for requesting biometric authentication.
+   * Displayed in the biometric prompt on both iOS and Android.
+   */
+  reason?: string;
+  /**
+   * Title for the biometric prompt.
+   * Only for Android.
+   */
+  title?: string;
+  /**
+   * Subtitle for the biometric prompt.
+   * Only for Android.
+   */
+  subtitle?: string;
+  /**
+   * Description for the biometric prompt.
+   * Only for Android.
+   */
+  description?: string;
+  /**
+   * Text for the negative/cancel button.
+   * Only for Android.
+   */
+  negativeButtonText?: string;
+}
+
+export interface StoredData {
+  value: string;
+}
+
+export interface DeleteDataOptions {
+  key: string;
+}
+
+export interface IsDataSavedOptions {
+  key: string;
+}
+
+export interface IsDataSavedResult {
+  isSaved: boolean;
+}
 
 /**
  * Biometric authentication error codes.
@@ -420,6 +516,63 @@ export interface NativeBiometricPlugin {
    * @since 7.3.0
    */
   isCredentialsSaved(options: IsCredentialsSavedOptions): Promise<IsCredentialsSavedResult>;
+
+  /**
+   * Stores an arbitrary string value under the given key.
+   * Values are encrypted at rest using the platform secure storage backend
+   * (Android Keystore + SharedPreferences, iOS Keychain).
+   *
+   * For biometric-protected storage, set `accessControl` and retrieve the value
+   * with `getSecureData()`. Credential helpers remain available for username/password flows.
+   *
+   * @param {SetDataOptions} options
+   * @returns {Promise<void>}
+   * @memberof NativeBiometricPlugin
+   * @since 8.6.0
+   */
+  setData(options: SetDataOptions): Promise<void>;
+
+  /**
+   * Gets a previously stored value for the given key.
+   * Only returns values stored without biometric `accessControl`.
+   *
+   * @param {GetDataOptions} options
+   * @returns {Promise<StoredData>}
+   * @memberof NativeBiometricPlugin
+   * @since 8.6.0
+   */
+  getData(options: GetDataOptions): Promise<StoredData>;
+
+  /**
+   * Gets a biometric-protected value for the given key.
+   * The value must have been stored with `accessControl` set to BIOMETRY_CURRENT_SET or BIOMETRY_ANY.
+   *
+   * @param {GetSecureDataOptions} options
+   * @returns {Promise<StoredData>}
+   * @memberof NativeBiometricPlugin
+   * @since 8.6.0
+   */
+  getSecureData(options: GetSecureDataOptions): Promise<StoredData>;
+
+  /**
+   * Deletes the stored value for the given key (protected and unprotected).
+   *
+   * @param {DeleteDataOptions} options
+   * @returns {Promise<void>}
+   * @memberof NativeBiometricPlugin
+   * @since 8.6.0
+   */
+  deleteData(options: DeleteDataOptions): Promise<void>;
+
+  /**
+   * Checks whether a value is already saved for the given key.
+   *
+   * @param {IsDataSavedOptions} options
+   * @returns {Promise<IsDataSavedResult>}
+   * @memberof NativeBiometricPlugin
+   * @since 8.6.0
+   */
+  isDataSaved(options: IsDataSavedOptions): Promise<IsDataSavedResult>;
 
   /**
    * Get the native Capacitor plugin version.
