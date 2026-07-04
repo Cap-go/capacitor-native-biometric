@@ -48,6 +48,13 @@ public class AuthActivity extends AppCompatActivity {
     private int maxAttempts;
     private int counter = 0;
     private int authValidityDuration;
+    private BiometricAuthenticatorConfig authenticatorConfig;
+    private static final String AUTH_KEY_AUTH_TYPES = "auth_key_auth_types";
+
+    // Mirrors KeyProperties auth-type flags when older compile stubs omit symbols.
+    private static final int KEY_AUTH_BIOMETRIC_STRONG = 1;
+    private static final int KEY_AUTH_BIOMETRIC_WEAK = 2;
+    private static final int KEY_AUTH_DEVICE_CREDENTIAL = 4;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -93,22 +100,14 @@ public class AuthActivity extends AppCompatActivity {
             .setSubtitle(getIntent().hasExtra("subtitle") ? getIntent().getStringExtra("subtitle") : null)
             .setDescription(getIntent().hasExtra("description") ? getIntent().getStringExtra("description") : null);
 
-        // Note: useFallback parameter is ignored on Android (iOS-only feature)
-        // Android's BiometricPrompt API has a constraint: when DEVICE_CREDENTIAL authenticator is used,
-        // setNegativeButtonText() cannot be called (it will throw IllegalArgumentException).
-        // Since this plugin always provides a cancel button for consistency, we cannot support
-        // device credential fallback. Users should use system settings to enroll biometrics instead.
         int[] allowedTypes = getIntent().getIntArrayExtra("allowedBiometryTypes");
+        authenticatorConfig = BiometricAuthenticatorConfig.fromAllowedTypes(allowedTypes);
+        builder.setAllowedAuthenticators(authenticatorConfig.promptAuthenticators);
 
-        int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
-        if (allowedTypes != null) {
-            // Filter authenticators based on allowed types
-            authenticators = getAllowedAuthenticators(allowedTypes);
+        if (authenticatorConfig.allowNegativeButton) {
+            String negativeText = getIntent().getStringExtra("negativeButtonText");
+            builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
         }
-        builder.setAllowedAuthenticators(authenticators);
-
-        String negativeText = getIntent().getStringExtra("negativeButtonText");
-        builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
 
         BiometricPrompt.PromptInfo promptInfo = builder.build();
 
@@ -143,11 +142,13 @@ public class AuthActivity extends AppCompatActivity {
                         handleSetSecureCredentials(result);
                     } else if ("getSecureCredentials".equals(mode)) {
                         handleGetSecureCredentials(result);
-                    } else {
+                    } else if (authenticatorConfig.requiresCryptoObject) {
                         if (!validateCryptoObject(result)) {
                             finishActivity("error", 10, "Biometric security check failed");
                             return;
                         }
+                        finishActivity();
+                    } else {
                         finishActivity();
                     }
                 }
@@ -168,6 +169,11 @@ public class AuthActivity extends AppCompatActivity {
         if (("setSecureCredentials".equals(mode) || "getSecureCredentials".equals(mode)) && authValidityDuration > 0) {
             // Validity-window mode: a single authentication unlocks the Keystore key for
             // `authValidityDuration` seconds, so the prompt is not bound to a CryptoObject.
+            biometricPrompt.authenticate(promptInfo);
+            return;
+        }
+
+        if (!authenticatorConfig.requiresCryptoObject) {
             biometricPrompt.authenticate(promptInfo);
             return;
         }
@@ -235,8 +241,14 @@ public class AuthActivity extends AppCompatActivity {
         } catch (CertificateException e) {
             throw new GeneralSecurityException("Failed to load AndroidKeyStore", e);
         }
+        int expectedAuthTypes = getAuthKeyTypes();
+        int storedAuthTypes = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).getInt(AUTH_KEY_AUTH_TYPES, -1);
+        if (keyStore.containsAlias(AUTH_KEY_ALIAS) && storedAuthTypes != expectedAuthTypes) {
+            keyStore.deleteEntry(AUTH_KEY_ALIAS);
+        }
         if (!keyStore.containsAlias(AUTH_KEY_ALIAS)) {
             generateSecretKey();
+            storeAuthKeyTypes(expectedAuthTypes);
         }
         try {
             return (SecretKey) keyStore.getKey(AUTH_KEY_ALIAS, null);
@@ -247,13 +259,13 @@ public class AuthActivity extends AppCompatActivity {
 
     private void generateSecretKey() throws GeneralSecurityException {
         try {
-            buildAuthKey(true);
+            buildAuthKey(true, getAuthKeyTypes());
         } catch (ProviderException e) {
             // Some OEM Keymaster/TEE implementations (notably Xiaomi/MIUI and Oppo/ColorOS) reject
             // setInvalidatedByBiometricEnrollment(true) and throw a generic ProviderException
             // ("Keystore key generation failed"). Retry once without that flag.
             try {
-                buildAuthKey(false);
+                buildAuthKey(false, getAuthKeyTypes());
             } catch (ProviderException retryError) {
                 // ProviderException is unchecked and would otherwise crash AuthActivity.onCreate.
                 // Convert it so callers handle it gracefully (return null -> error result).
@@ -262,7 +274,7 @@ public class AuthActivity extends AppCompatActivity {
         }
     }
 
-    private void buildAuthKey(boolean invalidatedByEnrollment) throws GeneralSecurityException {
+    private void buildAuthKey(boolean invalidatedByEnrollment, int keyAuthTypes) throws GeneralSecurityException {
         KeyGenerator keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
         KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(
             AUTH_KEY_ALIAS,
@@ -273,7 +285,8 @@ public class AuthActivity extends AppCompatActivity {
             .setUserAuthenticationRequired(true);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            builder.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG);
+            int authTypes = keyAuthTypes > 0 ? keyAuthTypes : defaultKeyAuthTypes();
+            builder.setUserAuthenticationParameters(0, authTypes);
         } else {
             // Use -1 for per-operation authentication, required for BiometricPrompt CryptoObject binding.
             // A positive value creates a time-based key that throws UserNotAuthenticatedException
@@ -372,7 +385,11 @@ public class AuthActivity extends AppCompatActivity {
             .setUserAuthenticationRequired(true);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            builder.setUserAuthenticationParameters(Math.max(0, authValidityDuration), KeyProperties.AUTH_BIOMETRIC_STRONG);
+            int authTypes = getAuthKeyTypes();
+            if (authTypes == 0) {
+                authTypes = defaultKeyAuthTypes();
+            }
+            builder.setUserAuthenticationParameters(Math.max(0, authValidityDuration), authTypes);
         } else if (authValidityDuration > 0) {
             builder.setUserAuthenticationValidityDurationSeconds(authValidityDuration);
         } else {
@@ -664,27 +681,24 @@ public class AuthActivity extends AppCompatActivity {
         }
     }
 
-    private int getAllowedAuthenticators(int[] allowedTypes) {
-        int authenticators = 0;
-        for (int type : allowedTypes) {
-            switch (type) {
-                case 3: // FINGERPRINT
-                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
-                    break;
-                case 4: // FACE_AUTHENTICATION
-                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
-                    break;
-                case 5: // IRIS_AUTHENTICATION
-                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
-                    break;
-                case 6: // MULTIPLE - allow all biometric types
-                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
-                    break;
-                case 7: // DEVICE_CREDENTIAL (PIN, pattern, or password)
-                    authenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
-                    break;
-            }
+    private static int defaultKeyAuthTypes() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return KEY_AUTH_BIOMETRIC_STRONG | KEY_AUTH_BIOMETRIC_WEAK;
         }
-        return authenticators > 0 ? authenticators : BiometricManager.Authenticators.BIOMETRIC_STRONG;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return KEY_AUTH_BIOMETRIC_STRONG;
+        }
+        return 0;
+    }
+
+    private int getAuthKeyTypes() {
+        if (authenticatorConfig != null && authenticatorConfig.keyAuthTypes > 0) {
+            return authenticatorConfig.keyAuthTypes;
+        }
+        return defaultKeyAuthTypes();
+    }
+
+    private void storeAuthKeyTypes(int authTypes) {
+        getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit().putInt(AUTH_KEY_AUTH_TYPES, authTypes).apply();
     }
 }

@@ -130,9 +130,8 @@ public class NativeBiometric extends Plugin {
             authenticationStrength = AUTH_STRENGTH_STRONG;
             isAvailable = true;
         } else if (hasWeakBiometric) {
-            // Weak-only biometrics (e.g. some face unlock) are reported for UX via
-            // biometryType/authenticationStrength but do not enable verifyIdentity().
             authenticationStrength = AUTH_STRENGTH_WEAK;
+            isAvailable = true;
         } else if (fallbackAvailable) {
             authenticationStrength = AUTH_STRENGTH_WEAK;
             isAvailable = true;

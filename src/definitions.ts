@@ -84,11 +84,10 @@ export interface AvailableResult {
   /**
    * Whether authentication is available.
    *
-   * On Android, `verifyIdentity()` uses a `CryptoObject` backed by
-   * `BIOMETRIC_STRONG`, so weak-only biometric methods such as some face unlock
-   * implementations are reported via `biometryType`/`authenticationStrength`
-   * but do not make this value `true`.
-   * If `useFallback` is true, PIN/pattern/password can make this value true.
+   * On Android, weak-only biometrics (such as some face unlock implementations)
+   * are available for `verifyIdentity()` when no `allowedBiometryTypes` filter
+   * excludes them. If `useFallback` is true, PIN/pattern/password can also make
+   * this value true.
    */
   isAvailable: boolean;
   /**
@@ -147,7 +146,10 @@ export interface BiometricOptions {
   /**
    * Only for Android.
    * Specify which biometry types are allowed for authentication.
-   * If not specified, all available types will be allowed.
+   * If not specified, all enrolled biometric classes (strong and weak) are allowed.
+   * On Android, face unlock is often classified as weak biometrics — include
+   * `BiometryType.FACE_AUTHENTICATION` or omit this option to allow it.
+   * Use `BiometryType.DEVICE_CREDENTIAL` for PIN/pattern/password (disables the cancel button).
    * @example [BiometryType.FINGERPRINT, BiometryType.FACE_AUTHENTICATION]
    */
   allowedBiometryTypes?: BiometryType[];
