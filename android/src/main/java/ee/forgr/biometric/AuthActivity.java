@@ -158,6 +158,8 @@ public class AuthActivity extends AppCompatActivity {
                         handleSetSecureCredentials(result);
                     } else if ("getSecureCredentials".equals(mode) || "getSecureData".equals(mode)) {
                         handleGetSecureCredentials(result);
+                    } else if ("verify".equals(mode)) {
+                        finishActivity();
                     } else if (authenticatorConfig.requiresCryptoObject) {
                         if (!validateCryptoObject(result)) {
                             finishActivity("error", 10, "Biometric security check failed");
@@ -189,7 +191,7 @@ public class AuthActivity extends AppCompatActivity {
             return;
         }
 
-        if (!authenticatorConfig.requiresCryptoObject) {
+        if ("verify".equals(mode) || !authenticatorConfig.requiresCryptoObject) {
             biometricPrompt.authenticate(promptInfo);
             return;
         }
