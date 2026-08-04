@@ -118,7 +118,15 @@ public class AuthActivity extends AppCompatActivity {
             .setDescription(getIntent().hasExtra("description") ? getIntent().getStringExtra("description") : null);
 
         int[] allowedTypes = getIntent().getIntArrayExtra("allowedBiometryTypes");
-        authenticatorConfig = BiometricAuthenticatorConfig.fromAllowedTypes(allowedTypes);
+        // Crypto-bound secure storage modes must not use STRONG|WEAK: BiometricPrompt rejects
+        // CryptoObject when Class 2 (Weak) authenticators are included.
+        if (isSecureStorageMode()) {
+            authenticatorConfig = BiometricAuthenticatorConfig.ensureCryptoCompatible(
+                BiometricAuthenticatorConfig.fromAllowedTypes(allowedTypes)
+            );
+        } else {
+            authenticatorConfig = BiometricAuthenticatorConfig.fromAllowedTypes(allowedTypes);
+        }
         builder.setAllowedAuthenticators(authenticatorConfig.promptAuthenticators);
 
         if (authenticatorConfig.allowNegativeButton) {

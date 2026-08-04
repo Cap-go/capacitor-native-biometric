@@ -51,4 +51,37 @@ public class BiometricAuthenticatorConfigTest {
 
         assertEquals(BiometricManager.Authenticators.BIOMETRIC_STRONG, config.promptAuthenticators);
     }
+
+    @Test
+    public void cryptoBoundCredentials_defaultUsesStrongOnly() {
+        BiometricAuthenticatorConfig config = BiometricAuthenticatorConfig.defaultForCryptoBoundCredentials();
+
+        assertEquals(BiometricManager.Authenticators.BIOMETRIC_STRONG, config.promptAuthenticators);
+        assertTrue(config.allowNegativeButton);
+        assertTrue(config.requiresCryptoObject);
+        assertTrue(
+            (config.promptAuthenticators & BiometricManager.Authenticators.BIOMETRIC_WEAK) != BiometricManager.Authenticators.BIOMETRIC_WEAK
+        );
+    }
+
+    @Test
+    public void ensureCryptoCompatible_upgradesWeakDefaultToStrong() {
+        BiometricAuthenticatorConfig weakDefault = BiometricAuthenticatorConfig.fromAllowedTypes(null);
+        BiometricAuthenticatorConfig config = BiometricAuthenticatorConfig.ensureCryptoCompatible(weakDefault);
+
+        assertEquals(BiometricAuthenticatorConfig.PROMPT_BIOMETRIC_ANY, weakDefault.promptAuthenticators);
+        assertEquals(BiometricManager.Authenticators.BIOMETRIC_STRONG, config.promptAuthenticators);
+        assertTrue(
+            (config.promptAuthenticators & BiometricManager.Authenticators.BIOMETRIC_WEAK) != BiometricManager.Authenticators.BIOMETRIC_WEAK
+        );
+    }
+
+    @Test
+    public void ensureCryptoCompatible_keepsFingerprintStrong() {
+        BiometricAuthenticatorConfig strong = BiometricAuthenticatorConfig.fromAllowedTypes(new int[] { 3 });
+        BiometricAuthenticatorConfig config = BiometricAuthenticatorConfig.ensureCryptoCompatible(strong);
+
+        assertEquals(BiometricManager.Authenticators.BIOMETRIC_STRONG, config.promptAuthenticators);
+        assertTrue(config.requiresCryptoObject);
+    }
 }
