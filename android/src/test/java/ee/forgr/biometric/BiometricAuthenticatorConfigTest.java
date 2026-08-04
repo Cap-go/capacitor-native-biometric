@@ -59,7 +59,9 @@ public class BiometricAuthenticatorConfigTest {
         assertEquals(BiometricManager.Authenticators.BIOMETRIC_STRONG, config.promptAuthenticators);
         assertTrue(config.allowNegativeButton);
         assertTrue(config.requiresCryptoObject);
-        assertEquals(0, config.promptAuthenticators & BiometricManager.Authenticators.BIOMETRIC_WEAK);
+        assertTrue(
+            (config.promptAuthenticators & BiometricManager.Authenticators.BIOMETRIC_WEAK) != BiometricManager.Authenticators.BIOMETRIC_WEAK
+        );
     }
 
     @Test
@@ -67,8 +69,11 @@ public class BiometricAuthenticatorConfigTest {
         BiometricAuthenticatorConfig weakDefault = BiometricAuthenticatorConfig.fromAllowedTypes(null);
         BiometricAuthenticatorConfig config = BiometricAuthenticatorConfig.ensureCryptoCompatible(weakDefault);
 
+        assertEquals(BiometricAuthenticatorConfig.PROMPT_BIOMETRIC_ANY, weakDefault.promptAuthenticators);
         assertEquals(BiometricManager.Authenticators.BIOMETRIC_STRONG, config.promptAuthenticators);
-        assertEquals(0, config.promptAuthenticators & BiometricManager.Authenticators.BIOMETRIC_WEAK);
+        assertTrue(
+            (config.promptAuthenticators & BiometricManager.Authenticators.BIOMETRIC_WEAK) != BiometricManager.Authenticators.BIOMETRIC_WEAK
+        );
     }
 
     @Test
