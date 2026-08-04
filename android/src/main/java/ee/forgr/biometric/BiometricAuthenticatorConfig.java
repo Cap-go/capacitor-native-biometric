@@ -98,6 +98,39 @@ public final class BiometricAuthenticatorConfig {
         return new BiometricAuthenticatorConfig(PROMPT_BIOMETRIC_ANY, keyAuthAny(), true, true);
     }
 
+    /**
+     * Default for modes that bind a {@code CryptoObject} to {@code BiometricPrompt}
+     * ({@code setSecureCredentials}, {@code getSecureCredentials}, and secure data variants).
+     * AndroidX rejects crypto-based auth when Class 2 (Weak) authenticators are allowed, so
+     * this must be strong-only — never {@link #defaultBiometric()}.
+     */
+    static BiometricAuthenticatorConfig defaultForCryptoBoundCredentials() {
+        return new BiometricAuthenticatorConfig(
+            BiometricManager.Authenticators.BIOMETRIC_STRONG,
+            keyAuthStrong(),
+            true,
+            true
+        );
+    }
+
+    /**
+     * Ensures the config is legal for {@code BiometricPrompt.authenticate(promptInfo, cryptoObject)}.
+     * Crypto-based auth only supports Class 3 (Strong) biometrics.
+     */
+    static BiometricAuthenticatorConfig ensureCryptoCompatible(BiometricAuthenticatorConfig config) {
+        if (config == null) {
+            return defaultForCryptoBoundCredentials();
+        }
+        boolean hasWeak = (config.promptAuthenticators & BiometricManager.Authenticators.BIOMETRIC_WEAK) != 0;
+        boolean hasDeviceCredential =
+            (config.promptAuthenticators & BiometricManager.Authenticators.DEVICE_CREDENTIAL) != 0;
+        boolean hasStrong = (config.promptAuthenticators & BiometricManager.Authenticators.BIOMETRIC_STRONG) != 0;
+        if (hasWeak || hasDeviceCredential || !hasStrong) {
+            return defaultForCryptoBoundCredentials();
+        }
+        return config;
+    }
+
     private static int keyAuthStrong() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             return KEY_AUTH_BIOMETRIC_STRONG;
