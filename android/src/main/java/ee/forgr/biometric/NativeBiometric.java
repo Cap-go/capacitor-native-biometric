@@ -711,6 +711,10 @@ public class NativeBiometric extends Plugin {
     private String decryptString(String stringToDecrypt, String KEY_ALIAS) throws GeneralSecurityException, IOException {
         byte[] combined = Base64.decode(stringToDecrypt, Base64.DEFAULT);
 
+        // Resolve the key once, outside format detection: a keystore failure is a
+        // real error and must not be mistaken for a format mismatch.
+        Key key = getKey(KEY_ALIAS);
+
         GeneralSecurityException newFormatFailure = null;
 
         // New format is IV + ciphertext + 16-byte GCM tag, so anything shorter than
@@ -726,7 +730,7 @@ public class NativeBiometric extends Plugin {
                 System.arraycopy(combined, GCM_IV_LENGTH, encryptedData, 0, encryptedData.length);
 
                 Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-                cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, iv));
+                cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
                 byte[] decryptedData = cipher.doFinal(encryptedData);
                 return new String(decryptedData, StandardCharsets.UTF_8);
             } catch (GeneralSecurityException e) {
@@ -743,10 +747,10 @@ public class NativeBiometric extends Plugin {
         try {
             byte[] LEGACY_FIXED_IV = new byte[12]; // All zeros by default
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, LEGACY_FIXED_IV));
+            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, LEGACY_FIXED_IV));
             byte[] decryptedData = cipher.doFinal(combined);
             return new String(decryptedData, StandardCharsets.UTF_8);
-        } catch (GeneralSecurityException | IOException e) {
+        } catch (GeneralSecurityException e) {
             if (newFormatFailure != null) {
                 e.addSuppressed(newFormatFailure);
             }
