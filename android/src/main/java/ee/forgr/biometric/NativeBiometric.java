@@ -41,7 +41,6 @@ import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Objects;
-import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
@@ -76,6 +75,8 @@ public class NativeBiometric extends Plugin {
     private static final String RSA_MODE = "RSA/ECB/PKCS1Padding";
     private static final String AES_MODE = "AES/ECB/PKCS7Padding";
     private static final int GCM_IV_LENGTH = 12;
+    private static final int GCM_TAG_LENGTH_BYTES = 16;
+    private static final int MIN_NEW_FORMAT_LENGTH = GCM_IV_LENGTH + GCM_TAG_LENGTH_BYTES;
     private static final String ENCRYPTED_KEY = "NativeBiometricKey";
     private static final String NATIVE_BIOMETRIC_SHARED_PREFERENCES = "NativeBiometricSharedPreferences";
     private static final String DATA_KEY_PREFIX = "data_";
@@ -710,11 +711,13 @@ public class NativeBiometric extends Plugin {
     private String decryptString(String stringToDecrypt, String KEY_ALIAS) throws GeneralSecurityException, IOException {
         byte[] combined = Base64.decode(stringToDecrypt, Base64.DEFAULT);
 
-        // Try new format first (IV prepended to ciphertext)
-        // New format: 12-byte IV + ciphertext (plaintext + 16-byte GCM auth tag)
-        // We check for > GCM_IV_LENGTH to ensure there's at least some ciphertext beyond just the IV
-        // The cipher's doFinal() will validate the auth tag and fail if data is malformed
-        if (combined.length >= GCM_IV_LENGTH + 1) {
+        GeneralSecurityException newFormatFailure = null;
+
+        // New format is IV + ciphertext + 16-byte GCM tag, so anything shorter than
+        // MIN_NEW_FORMAT_LENGTH cannot be new format and must be tried as legacy only.
+        // Feeding a short legacy blob into the new-format path leaves fewer than 16
+        // bytes after stripping the IV, which Keystore rejects as malformed input.
+        if (combined.length >= MIN_NEW_FORMAT_LENGTH) {
             try {
                 // Extract IV from the beginning of the data
                 byte[] iv = new byte[GCM_IV_LENGTH];
@@ -726,23 +729,29 @@ public class NativeBiometric extends Plugin {
                 cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, iv));
                 byte[] decryptedData = cipher.doFinal(encryptedData);
                 return new String(decryptedData, StandardCharsets.UTF_8);
-            } catch (BadPaddingException e) {
-                // Authentication tag verification failed (AEADBadTagException) or padding error
-                // BadPaddingException is the parent class of AEADBadTagException
-                // Likely means data was encrypted with legacy format - fall through to legacy decryption
             } catch (GeneralSecurityException e) {
-                // Other security exceptions should not be masked - rethrow
-                throw e;
+                // A failure here usually just means the blob is legacy format. Keystore
+                // implementations disagree on which exception a malformed GCM input maps
+                // to (BadPadding on some devices, IllegalBlockSize on others), so the
+                // exception type must not gate the legacy fallback.
+                newFormatFailure = e;
             }
         }
 
         // Fallback to legacy format (FIXED_IV - all zeros)
         // This branch handles credentials encrypted with the old vulnerable method
-        byte[] LEGACY_FIXED_IV = new byte[12]; // All zeros by default
-        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-        cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, LEGACY_FIXED_IV));
-        byte[] decryptedData = cipher.doFinal(combined);
-        return new String(decryptedData, StandardCharsets.UTF_8);
+        try {
+            byte[] LEGACY_FIXED_IV = new byte[12]; // All zeros by default
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            cipher.init(Cipher.DECRYPT_MODE, getKey(KEY_ALIAS), new GCMParameterSpec(128, LEGACY_FIXED_IV));
+            byte[] decryptedData = cipher.doFinal(combined);
+            return new String(decryptedData, StandardCharsets.UTF_8);
+        } catch (GeneralSecurityException | IOException e) {
+            if (newFormatFailure != null) {
+                e.addSuppressed(newFormatFailure);
+            }
+            throw e;
+        }
     }
 
     @SuppressLint("NewAPI") // API level is already checked
