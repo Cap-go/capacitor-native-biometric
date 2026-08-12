@@ -84,4 +84,13 @@ public class BiometricAuthenticatorConfigTest {
         assertEquals(BiometricManager.Authenticators.BIOMETRIC_STRONG, config.promptAuthenticators);
         assertTrue(config.requiresCryptoObject);
     }
+
+    @Test
+    public void ensureCryptoCompatible_upgradesFaceAuthenticationToStrong() {
+        BiometricAuthenticatorConfig face = BiometricAuthenticatorConfig.fromAllowedTypes(new int[] { 4 });
+        BiometricAuthenticatorConfig config = BiometricAuthenticatorConfig.ensureCryptoCompatible(face);
+
+        assertEquals(BiometricAuthenticatorConfig.PROMPT_BIOMETRIC_ANY, face.promptAuthenticators);
+        assertEquals(BiometricManager.Authenticators.BIOMETRIC_STRONG, config.promptAuthenticators);
+    }
 }
