@@ -81,9 +81,10 @@ export interface IsAvailableOptions {
    * enrolled.
    *
    * You normally do not need this. On Android 12 and newer a face enrolled next to a fingerprint is
-   * detected and reported as `BiometryType.MULTIPLE` on its own. Detection is not possible on
-   * Android 11 and older, nor for the rare Class 3 (Strong) face sensor, and those devices report
-   * `BiometryType.FINGERPRINT` because most devices advertise a face sensor the user never
+   * usually detected and reported as `BiometryType.MULTIPLE` on its own. Detection is best-effort,
+   * and is not possible on Android 11 and older, for the rare Class 3 (Strong) face sensor, or on a
+   * vendor build whose biometric labels name only the preferred modality. Undetected devices report
+   * `BiometryType.FINGERPRINT`, because most devices advertise a face sensor the user never
    * enrolled. Set this to `true` if your UI would rather over-report `MULTIPLE` there.
    *
    * `verifyIdentity()` is unaffected and still offers every enrolled biometric the device supports;

@@ -222,6 +222,11 @@ public class NativeBiometric extends Plugin {
      * modality is enrolled on top of it. Comparing the two labels to each other rather than to a
      * hardcoded string keeps this locale-independent.
      * <p>
+     * The label is documented as free to name the user's preferred modality when several qualify,
+     * which AOSP does not do but a vendor build may. That can only hide a second modality, never
+     * invent one, so the failure mode is reporting FINGERPRINT as before rather than a wrong
+     * MULTIPLE, and {@code preferMultipleBiometryType} remains the way out.
+     * <p>
      * Only meaningful when a fingerprint is enrolled; the caller guarantees that.
      */
     @RequiresApi(Build.VERSION_CODES.S)
