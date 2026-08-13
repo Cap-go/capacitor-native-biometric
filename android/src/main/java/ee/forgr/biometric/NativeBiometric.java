@@ -84,11 +84,17 @@ public class NativeBiometric extends Plugin {
 
     private SharedPreferences encryptedSharedPreferences;
 
+    /**
+     * Last value passed to {@code isAvailable()}, reused so the {@code biometryChange} event
+     * reports the same biometry type the app asked for.
+     */
+    private boolean preferMultipleBiometryType = false;
+
     @Override
     protected void handleOnResume() {
         super.handleOnResume();
         // Notify listeners when app resumes from background
-        JSObject result = checkBiometryAvailability(false);
+        JSObject result = checkBiometryAvailability(false, this.preferMultipleBiometryType);
         notifyListeners("biometryChange", result);
     }
 
@@ -96,7 +102,7 @@ public class NativeBiometric extends Plugin {
      * Check biometry availability and return result as JSObject.
      * This is a helper method used by both isAvailable() and handleOnResume().
      */
-    private JSObject checkBiometryAvailability(boolean useFallback) {
+    private JSObject checkBiometryAvailability(boolean useFallback, boolean preferMultipleBiometryType) {
         JSObject ret = new JSObject();
 
         BiometricManager biometricManager = BiometricManager.from(getContext());
@@ -116,7 +122,7 @@ public class NativeBiometric extends Plugin {
         boolean fallbackAvailable = useFallback && deviceIsSecure;
 
         // Determine biometry type
-        int biometryType = detectBiometryType(biometricManager);
+        int biometryType = detectBiometryType(hasStrongBiometric || hasWeakBiometric, preferMultipleBiometryType);
         ret.put("biometryType", biometryType);
 
         // Device is secure if it has PIN/pattern/password
@@ -162,7 +168,8 @@ public class NativeBiometric extends Plugin {
     @PluginMethod
     public void isAvailable(PluginCall call) {
         boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));
-        JSObject result = checkBiometryAvailability(useFallback);
+        this.preferMultipleBiometryType = Boolean.TRUE.equals(call.getBoolean("preferMultipleBiometryType", false));
+        JSObject result = checkBiometryAvailability(useFallback, this.preferMultipleBiometryType);
         call.resolve(result);
     }
 
@@ -172,59 +179,67 @@ public class NativeBiometric extends Plugin {
      * so we check for hardware features. This is informational only - always use
      * isAvailable for logic decisions as hardware presence doesn't guarantee availability.
      */
-    private int detectBiometryType(BiometricManager biometricManager) {
+    private int detectBiometryType(boolean anyBiometricEnrolled, boolean preferMultipleBiometryType) {
         PackageManager pm = getContext().getPackageManager();
 
         boolean hasFingerprint = pm.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT);
         boolean hasFace = pm.hasSystemFeature(PackageManager.FEATURE_FACE);
         boolean hasIris = pm.hasSystemFeature(PackageManager.FEATURE_IRIS);
 
+        boolean fingerprintEnrolled = hasFingerprint && isFingerprintEnrolled();
+        // BiometricManager reports that some biometric is enrolled, but not which one. When no
+        // fingerprint is enrolled on a device advertising a face or iris sensor, that enrolled
+        // biometric can only be the face or iris one.
+        boolean nonFingerprintEnrolled = anyBiometricEnrolled && !fingerprintEnrolled && (hasFace || hasIris);
+
         return resolveBiometryType(
             hasFingerprint,
             hasFace,
             hasIris,
-            hasFingerprint && isFingerprintEnrolled(),
-            hasFace && isFaceEnrolled(),
-            hasIris && isIrisEnrolled(),
-            this.deviceHasCredentials()
+            fingerprintEnrolled,
+            nonFingerprintEnrolled,
+            this.deviceHasCredentials(),
+            preferMultipleBiometryType
         );
     }
 
     /**
-     * Maps hardware features plus enrollment state to a biometry type.
+     * Maps hardware features plus the enrollment state we can observe to a biometry type.
      * <p>
-     * Enrollment wins over advertised hardware because many devices report
-     * {@code FEATURE_FACE} even when the user never enrolled a face. Counting hardware alone
-     * returned MULTIPLE for fingerprint-only users (issue #49); returning FINGERPRINT whenever a
-     * fingerprint was enrolled hid the second modality from users who enrolled both (issue #110).
-     * Counting enrolled modalities satisfies both: a single enrolled modality reports itself, two
-     * or more report MULTIPLE.
+     * Advertised hardware is not enrollment: many devices report {@code FEATURE_FACE} even when the
+     * user never enrolled a face, so counting hardware alone reported MULTIPLE to fingerprint-only
+     * users (issue #49). Only fingerprint enrollment can be read directly
+     * ({@code FingerprintManager}); face and iris enrollment is exposed by the {@code FaceManager} /
+     * {@code IrisManager} services, which are hidden and gated behind the signature-level
+     * {@code USE_BIOMETRIC_INTERNAL} permission, so an app cannot query them.
      * <p>
-     * When enrollment state is unknown (no enrolled modality detected, e.g. because the hidden
-     * face/iris APIs are unavailable), we fall back to the hardware-feature count.
+     * That leaves one genuinely ambiguous case: a fingerprint is enrolled and the device also
+     * advertises a face or iris sensor. Issue #49 wants FINGERPRINT there and issue #110 wants
+     * MULTIPLE, and no public API can tell the two devices apart, so {@code preferMultipleBiometryType}
+     * lets the app pick. It defaults to false, which keeps the #49 behavior.
      */
     static int resolveBiometryType(
         boolean hasFingerprint,
         boolean hasFace,
         boolean hasIris,
         boolean fingerprintEnrolled,
-        boolean faceEnrolled,
-        boolean irisEnrolled,
-        boolean deviceHasCredentials
+        boolean nonFingerprintEnrolled,
+        boolean deviceHasCredentials,
+        boolean preferMultipleBiometryType
     ) {
-        int enrolledCount = 0;
-        if (fingerprintEnrolled) enrolledCount++;
-        if (faceEnrolled) enrolledCount++;
-        if (irisEnrolled) enrolledCount++;
+        // Only the face or iris sensor is enrolled, whatever else the device advertises.
+        if (nonFingerprintEnrolled && !fingerprintEnrolled) {
+            if (hasFace) {
+                return FACE_AUTHENTICATION;
+            } else if (hasIris) {
+                return IRIS_AUTHENTICATION;
+            }
+        }
 
-        if (enrolledCount > 1) {
-            return MULTIPLE;
-        } else if (fingerprintEnrolled) {
+        // Prefer FINGERPRINT when enrolled, even on devices advertising multiple biometric sensors,
+        // unless the app asked for the ambiguous case to be reported as MULTIPLE.
+        if (fingerprintEnrolled && !preferMultipleBiometryType) {
             return FINGERPRINT;
-        } else if (faceEnrolled) {
-            return FACE_AUTHENTICATION;
-        } else if (irisEnrolled) {
-            return IRIS_AUTHENTICATION;
         }
 
         int typeCount = 0;
@@ -260,38 +275,6 @@ public class NativeBiometric extends Plugin {
             FingerprintManager fingerprintManager = getContext().getSystemService(FingerprintManager.class);
             return fingerprintManager != null && fingerprintManager.hasEnrolledFingerprints();
         } catch (SecurityException ignored) {
-            return false;
-        }
-    }
-
-    private boolean isFaceEnrolled() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            return false;
-        }
-        return hasEnrolledTemplates("face");
-    }
-
-    private boolean isIrisEnrolled() {
-        return hasEnrolledTemplates("iris");
-    }
-
-    /**
-     * Android exposes no public "is face/iris enrolled" API, only the hidden FaceManager and
-     * IrisManager system services. Reflection can fail on any device (service missing, method
-     * hidden by the non-SDK interface restrictions, permission denied), in which case we report
-     * the modality as not enrolled and let {@link #resolveBiometryType} fall back to hardware
-     * features.
-     */
-    @SuppressLint("PrivateApi")
-    private boolean hasEnrolledTemplates(String serviceName) {
-        try {
-            Object manager = getContext().getSystemService(serviceName);
-            if (manager == null) {
-                return false;
-            }
-            Object enrolled = manager.getClass().getMethod("hasEnrolledTemplates").invoke(manager);
-            return Boolean.TRUE.equals(enrolled);
-        } catch (Throwable ignored) {
             return false;
         }
     }

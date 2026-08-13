@@ -75,6 +75,26 @@ export interface IsAvailableOptions {
    *   control the auth-dialog fallback there.
    */
   useFallback: boolean;
+  /**
+   * Android only. How to report `biometryType` on a device that has a fingerprint enrolled and
+   * also advertises a face or iris sensor.
+   *
+   * Android only lets an app read fingerprint enrollment. Face and iris enrollment live behind
+   * the hidden `FaceManager` / `IrisManager` services, which require the signature-level
+   * `USE_BIOMETRIC_INTERNAL` permission, so a device where only the fingerprint is enrolled is
+   * indistinguishable from one where the face is enrolled too.
+   *
+   * - `false` (default): report `BiometryType.FINGERPRINT`, because most devices advertise a face
+   *   sensor the user never enrolled.
+   * - `true`: report `BiometryType.MULTIPLE`, for apps whose UI covers several biometrics.
+   *
+   * Either way `verifyIdentity()` still offers every enrolled biometric the device supports; this
+   * only changes the reported type. The most recent value is reused for `biometryChange` events.
+   *
+   * @default false
+   * @since 8.6.5
+   */
+  preferMultipleBiometryType?: boolean;
 }
 
 /**
