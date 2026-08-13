@@ -375,8 +375,8 @@ export interface IsDataSavedResult {
 
 /**
  * Biometric authentication error codes.
- * These error codes are used in `isAvailable()`, `verifyIdentity()`, and
- * `getSecureCredentials()` rejection payloads.
+ * These error codes are used in `isAvailable()`, `verifyIdentity()`, `getSecureCredentials()`,
+ * and `getSecureData()` rejection payloads.
  *
  * Keep this in sync with BiometricAuthError in README.md
  * Update whenever `convertToPluginErrorCode` functions are modified
@@ -447,17 +447,18 @@ export enum BiometricAuthError {
    */
   USER_FALLBACK = 17,
   /**
-   * No biometric-protected credentials exist for the requested server.
-   * Platform: Android, iOS (`getSecureCredentials()`).
+   * No biometric-protected credentials or data exist for the requested server or key.
+   * Platform: Android, iOS (`getSecureCredentials()`, `getSecureData()`).
    *
-   * Thrown when `getSecureCredentials()` is called but nothing was stored with
-   * `accessControl` BIOMETRY_CURRENT_SET or BIOMETRY_ANY for that server — for example
-   * after `deleteCredentials()`, a fresh install, or credentials removed from the secure
-   * enclave after biometric enrollment changes.
+   * Thrown when `getSecureCredentials()` or `getSecureData()` is called but nothing was stored
+   * with `accessControl` BIOMETRY_CURRENT_SET or BIOMETRY_ANY — for example after deletion,
+   * a fresh install, or items removed from the secure enclave after biometric enrollment changes.
    *
-   * Rejection message differs by platform:
-   * - Android: `No protected credentials found`
-   * - iOS: `No protected credentials found for server`
+   * Rejection message differs by platform and method:
+   * - `getSecureCredentials()`: Android `No protected credentials found`, iOS
+   *   `No protected credentials found for server`
+   * - `getSecureData()`: Android `No protected data found`, iOS
+   *   `No protected data found for key`
    *
    * @since 8.4.0
    */
@@ -542,8 +543,11 @@ export interface NativeBiometricPlugin {
    * If no protected credentials exist for the server, the promise rejects with code `21`
    * (`BiometricAuthError.NO_PROTECTED_CREDENTIALS_FOUND`). This is stable, expected
    * behavior — for example when credentials were never saved with biometric protection,
-   * were deleted, or were invalidated after biometric enrollment changes. Use
-   * `isCredentialsSaved()` to check first, or handle the rejection in your app flow.
+   * were deleted, or were invalidated after biometric enrollment changes.
+   * `isCredentialsSaved()` returns true when any credentials (protected or unprotected) exist,
+   * so it does not guarantee a biometric-protected entry is present — handle code `21` in
+   * your catch block or only call after storing with `accessControl` BIOMETRY_CURRENT_SET
+   * or BIOMETRY_ANY.
    * Platform messages: Android `No protected credentials found`, iOS
    * `No protected credentials found for server`.
    *
