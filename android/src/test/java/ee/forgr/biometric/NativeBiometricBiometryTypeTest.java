@@ -70,6 +70,12 @@ public class NativeBiometricBiometryTypeTest {
         assertEquals(FACE_AUTHENTICATION, NativeBiometric.resolveBiometryType(true, true, false, false, true, true, PREFER_MULTIPLE));
     }
 
+    /** Face and iris hardware together cannot say which of the two is the enrolled one. */
+    @Test
+    public void faceAndIrisHardware_onlyOneEnrolled_returnsMultiple() {
+        assertEquals(MULTIPLE, NativeBiometric.resolveBiometryType(false, true, true, false, true, true, PREFER_FINGERPRINT));
+    }
+
     @Test
     public void fingerprintAndIrisHardware_onlyIrisEnrolled_returnsIris() {
         assertEquals(IRIS_AUTHENTICATION, NativeBiometric.resolveBiometryType(true, false, true, false, true, true, PREFER_FINGERPRINT));

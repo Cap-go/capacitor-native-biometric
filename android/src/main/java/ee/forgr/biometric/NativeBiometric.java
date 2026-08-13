@@ -273,8 +273,9 @@ public class NativeBiometric extends Plugin {
             return MULTIPLE;
         }
 
-        // Only the face or iris sensor is enrolled, whatever else the device advertises.
-        if (otherBiometricEnrolled) {
+        // Only the face or iris sensor is enrolled, whatever else the device advertises. A device
+        // advertising both cannot tell us which of the two it is, so it stays MULTIPLE.
+        if (otherBiometricEnrolled && !(hasFace && hasIris)) {
             if (hasFace) {
                 return FACE_AUTHENTICATION;
             } else if (hasIris) {
