@@ -76,20 +76,19 @@ export interface IsAvailableOptions {
    */
   useFallback: boolean;
   /**
-   * Android only. How to report `biometryType` on a device that has a fingerprint enrolled and
-   * also advertises a face or iris sensor.
+   * Android only. Report `BiometryType.MULTIPLE` whenever a fingerprint is enrolled and the device
+   * also advertises a face or iris sensor, even when that second modality cannot be confirmed as
+   * enrolled.
    *
-   * Android only lets an app read fingerprint enrollment. Face and iris enrollment live behind
-   * the hidden `FaceManager` / `IrisManager` services, which require the signature-level
-   * `USE_BIOMETRIC_INTERNAL` permission, so a device where only the fingerprint is enrolled is
-   * indistinguishable from one where the face is enrolled too.
+   * You normally do not need this. On Android 12 and newer a face enrolled next to a fingerprint is
+   * detected and reported as `BiometryType.MULTIPLE` on its own. Detection is not possible on
+   * Android 11 and older, nor for the rare Class 3 (Strong) face sensor, and those devices report
+   * `BiometryType.FINGERPRINT` because most devices advertise a face sensor the user never
+   * enrolled. Set this to `true` if your UI would rather over-report `MULTIPLE` there.
    *
-   * - `false` (default): report `BiometryType.FINGERPRINT`, because most devices advertise a face
-   *   sensor the user never enrolled.
-   * - `true`: report `BiometryType.MULTIPLE`, for apps whose UI covers several biometrics.
-   *
-   * Either way `verifyIdentity()` still offers every enrolled biometric the device supports; this
-   * only changes the reported type. The most recent value is reused for `biometryChange` events.
+   * `verifyIdentity()` is unaffected and still offers every enrolled biometric the device supports;
+   * this only changes the reported type. The most recent value is reused for `biometryChange`
+   * events.
    *
    * @default false
    * @since 8.6.5

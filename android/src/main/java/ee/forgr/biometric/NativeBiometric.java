@@ -12,8 +12,10 @@ import android.os.Build;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.security.keystore.StrongBoxUnavailableException;
+import android.text.TextUtils;
 import android.util.Base64;
 import androidx.activity.result.ActivityResult;
+import androidx.annotation.RequiresApi;
 import androidx.biometric.BiometricManager;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -187,20 +189,60 @@ public class NativeBiometric extends Plugin {
         boolean hasIris = pm.hasSystemFeature(PackageManager.FEATURE_IRIS);
 
         boolean fingerprintEnrolled = hasFingerprint && isFingerprintEnrolled();
-        // BiometricManager reports that some biometric is enrolled, but not which one. When no
-        // fingerprint is enrolled on a device advertising a face or iris sensor, that enrolled
-        // biometric can only be the face or iris one.
-        boolean nonFingerprintEnrolled = anyBiometricEnrolled && !fingerprintEnrolled && (hasFace || hasIris);
+        boolean otherBiometricEnrolled;
+        if (fingerprintEnrolled) {
+            otherBiometricEnrolled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isWeakBiometricEnrolledBesidesFingerprint();
+        } else {
+            // BiometricManager reports that some biometric is enrolled, but not which one. With no
+            // fingerprint enrolled on a device advertising a face or iris sensor, the enrolled
+            // biometric can only be the face or iris one.
+            otherBiometricEnrolled = anyBiometricEnrolled && (hasFace || hasIris);
+        }
 
         return resolveBiometryType(
             hasFingerprint,
             hasFace,
             hasIris,
             fingerprintEnrolled,
-            nonFingerprintEnrolled,
+            otherBiometricEnrolled,
             this.deviceHasCredentials(),
             preferMultipleBiometryType
         );
+    }
+
+    /**
+     * Whether a Class 2 (Weak) biometric — in practice face unlock — is enrolled next to the
+     * fingerprint. Android exposes no per-modality enrollment API, but since API 31 the labels
+     * {@code BiometricManager.getStrings()} produces are built from the sensors that are actually
+     * enrolled and strong enough for the requested class: one enrolled modality yields its own
+     * label, several yield a generic one.
+     * <p>
+     * Asking for both classes therefore answers the question without parsing anything: an enrolled
+     * fingerprint is Class 3, so the Class 3 and Class 2 labels can only differ when a weaker
+     * modality is enrolled on top of it. Comparing the two labels to each other rather than to a
+     * hardcoded string keeps this locale-independent.
+     * <p>
+     * Only meaningful when a fingerprint is enrolled; the caller guarantees that.
+     */
+    @RequiresApi(Build.VERSION_CODES.S)
+    private boolean isWeakBiometricEnrolledBesidesFingerprint() {
+        try {
+            android.hardware.biometrics.BiometricManager manager = getContext().getSystemService(
+                android.hardware.biometrics.BiometricManager.class
+            );
+            if (manager == null) {
+                return false;
+            }
+            CharSequence strongLabel = manager
+                .getStrings(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                .getButtonLabel();
+            CharSequence weakLabel = manager
+                .getStrings(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK)
+                .getButtonLabel();
+            return strongLabel != null && weakLabel != null && !TextUtils.equals(strongLabel, weakLabel);
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     /**
@@ -208,27 +250,31 @@ public class NativeBiometric extends Plugin {
      * <p>
      * Advertised hardware is not enrollment: many devices report {@code FEATURE_FACE} even when the
      * user never enrolled a face, so counting hardware alone reported MULTIPLE to fingerprint-only
-     * users (issue #49). Only fingerprint enrollment can be read directly
-     * ({@code FingerprintManager}); face and iris enrollment is exposed by the {@code FaceManager} /
-     * {@code IrisManager} services, which are hidden and gated behind the signature-level
-     * {@code USE_BIOMETRIC_INTERNAL} permission, so an app cannot query them.
+     * users (issue #49), while returning FINGERPRINT for every fingerprint hid the second modality
+     * from users who enrolled both (issue #110). Deciding on enrolled modalities settles both: one
+     * enrolled modality reports itself, two report MULTIPLE.
      * <p>
-     * That leaves one genuinely ambiguous case: a fingerprint is enrolled and the device also
-     * advertises a face or iris sensor. Issue #49 wants FINGERPRINT there and issue #110 wants
-     * MULTIPLE, and no public API can tell the two devices apart, so {@code preferMultipleBiometryType}
-     * lets the app pick. It defaults to false, which keeps the #49 behavior.
+     * {@code otherBiometricEnrolled} is best-effort. Where it cannot be established — Android 11 and
+     * older, or a Class 3 face sensor, which is indistinguishable from a lone fingerprint — the
+     * device falls back to the #49 reading, and {@code preferMultipleBiometryType} lets an app that
+     * covers several biometrics ask for MULTIPLE instead.
      */
     static int resolveBiometryType(
         boolean hasFingerprint,
         boolean hasFace,
         boolean hasIris,
         boolean fingerprintEnrolled,
-        boolean nonFingerprintEnrolled,
+        boolean otherBiometricEnrolled,
         boolean deviceHasCredentials,
         boolean preferMultipleBiometryType
     ) {
+        // Fingerprint plus a face or iris enrolled next to it.
+        if (fingerprintEnrolled && otherBiometricEnrolled) {
+            return MULTIPLE;
+        }
+
         // Only the face or iris sensor is enrolled, whatever else the device advertises.
-        if (nonFingerprintEnrolled && !fingerprintEnrolled) {
+        if (otherBiometricEnrolled) {
             if (hasFace) {
                 return FACE_AUTHENTICATION;
             } else if (hasIris) {
@@ -236,8 +282,8 @@ public class NativeBiometric extends Plugin {
             }
         }
 
-        // Prefer FINGERPRINT when enrolled, even on devices advertising multiple biometric sensors,
-        // unless the app asked for the ambiguous case to be reported as MULTIPLE.
+        // Prefer FINGERPRINT when enrolled, even on devices advertising other biometric sensors,
+        // unless the app asked for the undetectable case to be reported as MULTIPLE.
         if (fingerprintEnrolled && !preferMultipleBiometryType) {
             return FINGERPRINT;
         }

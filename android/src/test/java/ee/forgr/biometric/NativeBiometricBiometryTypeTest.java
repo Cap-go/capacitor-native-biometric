@@ -37,7 +37,18 @@ public class NativeBiometricBiometryTypeTest {
         assertEquals(FINGERPRINT, NativeBiometric.resolveBiometryType(true, true, false, true, false, true, PREFER_FINGERPRINT));
     }
 
-    /** Issue #110: apps covering several biometrics can opt into MULTIPLE for the ambiguous case. */
+    /** Issue #110: fingerprint and face both enrolled reports MULTIPLE without any opt-in. */
+    @Test
+    public void dualHardware_fingerprintAndFaceEnrolled_returnsMultiple() {
+        assertEquals(MULTIPLE, NativeBiometric.resolveBiometryType(true, true, false, true, true, true, PREFER_FINGERPRINT));
+    }
+
+    @Test
+    public void dualHardware_fingerprintAndFaceEnrolled_ignoresPreferMultiple() {
+        assertEquals(MULTIPLE, NativeBiometric.resolveBiometryType(true, true, false, true, true, true, PREFER_MULTIPLE));
+    }
+
+    /** Undetectable second modality (Android 11 and older, or a Class 3 face sensor): opt-in wins. */
     @Test
     public void dualHardware_fingerprintEnrolled_preferMultiple_returnsMultiple() {
         assertEquals(MULTIPLE, NativeBiometric.resolveBiometryType(true, true, false, true, false, true, PREFER_MULTIPLE));
