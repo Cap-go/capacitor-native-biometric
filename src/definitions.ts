@@ -75,6 +75,26 @@ export interface IsAvailableOptions {
    *   control the auth-dialog fallback there.
    */
   useFallback: boolean;
+  /**
+   * Android only. Report `BiometryType.MULTIPLE` whenever a fingerprint is enrolled and the device
+   * also advertises a face or iris sensor, even when that second modality cannot be confirmed as
+   * enrolled.
+   *
+   * You normally do not need this. On Android 12 and newer a face enrolled next to a fingerprint is
+   * usually detected and reported as `BiometryType.MULTIPLE` on its own. Detection is best-effort,
+   * and is not possible on Android 11 and older, for the rare Class 3 (Strong) face sensor, or on a
+   * vendor build whose biometric labels name only the preferred modality. Undetected devices report
+   * `BiometryType.FINGERPRINT`, because most devices advertise a face sensor the user never
+   * enrolled. Set this to `true` if your UI would rather over-report `MULTIPLE` there.
+   *
+   * `verifyIdentity()` is unaffected and still offers every enrolled biometric the device supports;
+   * this only changes the reported type. The most recent value is reused for `biometryChange`
+   * events.
+   *
+   * @default false
+   * @since 8.6.5
+   */
+  preferMultipleBiometryType?: boolean;
 }
 
 /**

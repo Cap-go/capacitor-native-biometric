@@ -12,8 +12,10 @@ import android.os.Build;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.security.keystore.StrongBoxUnavailableException;
+import android.text.TextUtils;
 import android.util.Base64;
 import androidx.activity.result.ActivityResult;
+import androidx.annotation.RequiresApi;
 import androidx.biometric.BiometricManager;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -84,11 +86,17 @@ public class NativeBiometric extends Plugin {
 
     private SharedPreferences encryptedSharedPreferences;
 
+    /**
+     * Last value passed to {@code isAvailable()}, reused so the {@code biometryChange} event
+     * reports the same biometry type the app asked for.
+     */
+    private boolean preferMultipleBiometryType = false;
+
     @Override
     protected void handleOnResume() {
         super.handleOnResume();
         // Notify listeners when app resumes from background
-        JSObject result = checkBiometryAvailability(false);
+        JSObject result = checkBiometryAvailability(false, this.preferMultipleBiometryType);
         notifyListeners("biometryChange", result);
     }
 
@@ -96,7 +104,7 @@ public class NativeBiometric extends Plugin {
      * Check biometry availability and return result as JSObject.
      * This is a helper method used by both isAvailable() and handleOnResume().
      */
-    private JSObject checkBiometryAvailability(boolean useFallback) {
+    private JSObject checkBiometryAvailability(boolean useFallback, boolean preferMultipleBiometryType) {
         JSObject ret = new JSObject();
 
         BiometricManager biometricManager = BiometricManager.from(getContext());
@@ -116,7 +124,7 @@ public class NativeBiometric extends Plugin {
         boolean fallbackAvailable = useFallback && deviceIsSecure;
 
         // Determine biometry type
-        int biometryType = detectBiometryType(biometricManager);
+        int biometryType = detectBiometryType(hasStrongBiometric || hasWeakBiometric, preferMultipleBiometryType);
         ret.put("biometryType", biometryType);
 
         // Device is secure if it has PIN/pattern/password
@@ -162,7 +170,8 @@ public class NativeBiometric extends Plugin {
     @PluginMethod
     public void isAvailable(PluginCall call) {
         boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));
-        JSObject result = checkBiometryAvailability(useFallback);
+        this.preferMultipleBiometryType = Boolean.TRUE.equals(call.getBoolean("preferMultipleBiometryType", false));
+        JSObject result = checkBiometryAvailability(useFallback, this.preferMultipleBiometryType);
         call.resolve(result);
     }
 
@@ -172,23 +181,123 @@ public class NativeBiometric extends Plugin {
      * so we check for hardware features. This is informational only - always use
      * isAvailable for logic decisions as hardware presence doesn't guarantee availability.
      */
-    private int detectBiometryType(BiometricManager biometricManager) {
+    private int detectBiometryType(boolean anyBiometricEnrolled, boolean preferMultipleBiometryType) {
         PackageManager pm = getContext().getPackageManager();
 
         boolean hasFingerprint = pm.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT);
         boolean hasFace = pm.hasSystemFeature(PackageManager.FEATURE_FACE);
         boolean hasIris = pm.hasSystemFeature(PackageManager.FEATURE_IRIS);
 
+        boolean fingerprintEnrolled = hasFingerprint && isFingerprintEnrolled();
+        boolean otherBiometricEnrolled;
+        if (fingerprintEnrolled) {
+            otherBiometricEnrolled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isWeakBiometricEnrolledBesidesFingerprint();
+        } else {
+            // BiometricManager reports that some biometric is enrolled, but not which one. With no
+            // fingerprint enrolled on a device advertising a face or iris sensor, the enrolled
+            // biometric can only be the face or iris one.
+            otherBiometricEnrolled = anyBiometricEnrolled && (hasFace || hasIris);
+        }
+
+        return resolveBiometryType(
+            hasFingerprint,
+            hasFace,
+            hasIris,
+            fingerprintEnrolled,
+            otherBiometricEnrolled,
+            this.deviceHasCredentials(),
+            preferMultipleBiometryType
+        );
+    }
+
+    /**
+     * Whether a Class 2 (Weak) biometric — in practice face unlock — is enrolled next to the
+     * fingerprint. Android exposes no per-modality enrollment API, but since API 31 the labels
+     * {@code BiometricManager.getStrings()} produces are built from the sensors that are actually
+     * enrolled and strong enough for the requested class: one enrolled modality yields its own
+     * label, several yield a generic one.
+     * <p>
+     * Asking for both classes therefore answers the question without parsing anything: an enrolled
+     * fingerprint is Class 3, so the Class 3 and Class 2 labels can only differ when a weaker
+     * modality is enrolled on top of it. Comparing the two labels to each other rather than to a
+     * hardcoded string keeps this locale-independent.
+     * <p>
+     * The label is documented as free to name the user's preferred modality when several qualify,
+     * which AOSP does not do but a vendor build may. That can only hide a second modality, never
+     * invent one, so the failure mode is reporting FINGERPRINT as before rather than a wrong
+     * MULTIPLE, and {@code preferMultipleBiometryType} remains the way out.
+     * <p>
+     * Only meaningful when a fingerprint is enrolled; the caller guarantees that.
+     */
+    @RequiresApi(Build.VERSION_CODES.S)
+    private boolean isWeakBiometricEnrolledBesidesFingerprint() {
+        try {
+            android.hardware.biometrics.BiometricManager manager = getContext().getSystemService(
+                android.hardware.biometrics.BiometricManager.class
+            );
+            if (manager == null) {
+                return false;
+            }
+            CharSequence strongLabel = manager
+                .getStrings(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                .getButtonLabel();
+            CharSequence weakLabel = manager
+                .getStrings(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK)
+                .getButtonLabel();
+            return strongLabel != null && weakLabel != null && !TextUtils.equals(strongLabel, weakLabel);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * Maps hardware features plus the enrollment state we can observe to a biometry type.
+     * <p>
+     * Advertised hardware is not enrollment: many devices report {@code FEATURE_FACE} even when the
+     * user never enrolled a face, so counting hardware alone reported MULTIPLE to fingerprint-only
+     * users (issue #49), while returning FINGERPRINT for every fingerprint hid the second modality
+     * from users who enrolled both (issue #110). Deciding on enrolled modalities settles both: one
+     * enrolled modality reports itself, two report MULTIPLE.
+     * <p>
+     * {@code otherBiometricEnrolled} is best-effort. Where it cannot be established — Android 11 and
+     * older, or a Class 3 face sensor, which is indistinguishable from a lone fingerprint — the
+     * device falls back to the #49 reading, and {@code preferMultipleBiometryType} lets an app that
+     * covers several biometrics ask for MULTIPLE instead.
+     */
+    static int resolveBiometryType(
+        boolean hasFingerprint,
+        boolean hasFace,
+        boolean hasIris,
+        boolean fingerprintEnrolled,
+        boolean otherBiometricEnrolled,
+        boolean deviceHasCredentials,
+        boolean preferMultipleBiometryType
+    ) {
+        // Fingerprint plus a face or iris enrolled next to it.
+        if (fingerprintEnrolled && otherBiometricEnrolled) {
+            return MULTIPLE;
+        }
+
+        // Only the face or iris sensor is enrolled, whatever else the device advertises. A device
+        // advertising both cannot tell us which of the two it is, so it stays MULTIPLE.
+        if (otherBiometricEnrolled && !(hasFace && hasIris)) {
+            if (hasFace) {
+                return FACE_AUTHENTICATION;
+            } else if (hasIris) {
+                return IRIS_AUTHENTICATION;
+            }
+        }
+
+        // Prefer FINGERPRINT when enrolled, even on devices advertising other biometric sensors,
+        // unless the app asked for the undetectable case to be reported as MULTIPLE.
+        if (fingerprintEnrolled && !preferMultipleBiometryType) {
+            return FINGERPRINT;
+        }
+
         int typeCount = 0;
         if (hasFingerprint) typeCount++;
         if (hasFace) typeCount++;
         if (hasIris) typeCount++;
-
-        // Prefer FINGERPRINT when enrolled, even on devices advertising multiple biometric sensors.
-        // This avoids returning MULTIPLE in common cases where only fingerprint is actually enabled.
-        if (hasFingerprint && isFingerprintEnrolled()) {
-            return FINGERPRINT;
-        }
 
         if (typeCount > 1) {
             return MULTIPLE; // Multiple biometry types available
@@ -202,7 +311,7 @@ public class NativeBiometric extends Plugin {
 
         // If no biometric sensors are available but device has credentials (PIN/pattern/password)
         // return DEVICE_CREDENTIAL type
-        if (this.deviceHasCredentials()) {
+        if (deviceHasCredentials) {
             return DEVICE_CREDENTIAL;
         }
 
