@@ -179,16 +179,58 @@ public class NativeBiometric extends Plugin {
         boolean hasFace = pm.hasSystemFeature(PackageManager.FEATURE_FACE);
         boolean hasIris = pm.hasSystemFeature(PackageManager.FEATURE_IRIS);
 
+        return resolveBiometryType(
+            hasFingerprint,
+            hasFace,
+            hasIris,
+            hasFingerprint && isFingerprintEnrolled(),
+            hasFace && isFaceEnrolled(),
+            hasIris && isIrisEnrolled(),
+            this.deviceHasCredentials()
+        );
+    }
+
+    /**
+     * Maps hardware features plus enrollment state to a biometry type.
+     * <p>
+     * Enrollment wins over advertised hardware because many devices report
+     * {@code FEATURE_FACE} even when the user never enrolled a face. Counting hardware alone
+     * returned MULTIPLE for fingerprint-only users (issue #49); returning FINGERPRINT whenever a
+     * fingerprint was enrolled hid the second modality from users who enrolled both (issue #110).
+     * Counting enrolled modalities satisfies both: a single enrolled modality reports itself, two
+     * or more report MULTIPLE.
+     * <p>
+     * When enrollment state is unknown (no enrolled modality detected, e.g. because the hidden
+     * face/iris APIs are unavailable), we fall back to the hardware-feature count.
+     */
+    static int resolveBiometryType(
+        boolean hasFingerprint,
+        boolean hasFace,
+        boolean hasIris,
+        boolean fingerprintEnrolled,
+        boolean faceEnrolled,
+        boolean irisEnrolled,
+        boolean deviceHasCredentials
+    ) {
+        int enrolledCount = 0;
+        if (fingerprintEnrolled) enrolledCount++;
+        if (faceEnrolled) enrolledCount++;
+        if (irisEnrolled) enrolledCount++;
+
+        if (enrolledCount > 1) {
+            return MULTIPLE;
+        } else if (fingerprintEnrolled) {
+            return FINGERPRINT;
+        } else if (faceEnrolled) {
+            return FACE_AUTHENTICATION;
+        } else if (irisEnrolled) {
+            return IRIS_AUTHENTICATION;
+        }
+
         int typeCount = 0;
         if (hasFingerprint) typeCount++;
         if (hasFace) typeCount++;
         if (hasIris) typeCount++;
-
-        // Prefer FINGERPRINT when enrolled, even on devices advertising multiple biometric sensors.
-        // This avoids returning MULTIPLE in common cases where only fingerprint is actually enabled.
-        if (hasFingerprint && isFingerprintEnrolled()) {
-            return FINGERPRINT;
-        }
 
         if (typeCount > 1) {
             return MULTIPLE; // Multiple biometry types available
@@ -202,7 +244,7 @@ public class NativeBiometric extends Plugin {
 
         // If no biometric sensors are available but device has credentials (PIN/pattern/password)
         // return DEVICE_CREDENTIAL type
-        if (this.deviceHasCredentials()) {
+        if (deviceHasCredentials) {
             return DEVICE_CREDENTIAL;
         }
 
@@ -218,6 +260,38 @@ public class NativeBiometric extends Plugin {
             FingerprintManager fingerprintManager = getContext().getSystemService(FingerprintManager.class);
             return fingerprintManager != null && fingerprintManager.hasEnrolledFingerprints();
         } catch (SecurityException ignored) {
+            return false;
+        }
+    }
+
+    private boolean isFaceEnrolled() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return false;
+        }
+        return hasEnrolledTemplates("face");
+    }
+
+    private boolean isIrisEnrolled() {
+        return hasEnrolledTemplates("iris");
+    }
+
+    /**
+     * Android exposes no public "is face/iris enrolled" API, only the hidden FaceManager and
+     * IrisManager system services. Reflection can fail on any device (service missing, method
+     * hidden by the non-SDK interface restrictions, permission denied), in which case we report
+     * the modality as not enrolled and let {@link #resolveBiometryType} fall back to hardware
+     * features.
+     */
+    @SuppressLint("PrivateApi")
+    private boolean hasEnrolledTemplates(String serviceName) {
+        try {
+            Object manager = getContext().getSystemService(serviceName);
+            if (manager == null) {
+                return false;
+            }
+            Object enrolled = manager.getClass().getMethod("hasEnrolledTemplates").invoke(manager);
+            return Boolean.TRUE.equals(enrolled);
+        } catch (Throwable ignored) {
             return false;
         }
     }
