@@ -271,23 +271,35 @@ async saveCredentials(username: string, password: string) {
 
 ### Biometric Auth Errors
 
-This is a plugin specific list of error codes that can be thrown on verifyIdentity failure, or set as a part of isAvailable. It consolidates Android and iOS specific Authentication Error codes into one combined error list.
+This is a plugin specific list of error codes that can be thrown on `verifyIdentity()` failure, set as part of `isAvailable()`, or returned from `getSecureCredentials()` and `getSecureData()` when no biometric-protected item exists for the requested server or key. It consolidates Android and iOS specific authentication error codes into one combined error list.
 
-| Code | Description                 | Platform                     |
-| ---- | --------------------------- | ---------------------------- |
-| 0    | Unknown Error               | Android, iOS                 |
-| 1    | Biometrics Unavailable      | Android, iOS                 |
-| 2    | User Lockout                | Android, iOS                 |
-| 3    | Biometrics Not Enrolled     | Android, iOS                 |
-| 4    | User Temporary Lockout      | Android (Lockout for 30sec)  |
-| 10   | Authentication Failed       | Android, iOS                 |
-| 11   | App Cancel                  | iOS                          |
-| 12   | Invalid Context             | iOS                          |
-| 13   | Not Interactive             | iOS                          |
-| 14   | Passcode Not Set            | Android, iOS                 |
-| 15   | System Cancel               | Android, iOS                 |
-| 16   | User Cancel                 | Android, iOS                 |
-| 17   | User Fallback               | Android, iOS                 |
+| Code | Description                      | Platform                     |
+| ---- | -------------------------------- | ---------------------------- |
+| 0    | Unknown Error                    | Android, iOS                 |
+| 1    | Biometrics Unavailable           | Android, iOS                 |
+| 2    | User Lockout                     | Android, iOS                 |
+| 3    | Biometrics Not Enrolled          | Android, iOS                 |
+| 4    | User Temporary Lockout           | Android (Lockout for 30sec)  |
+| 10   | Authentication Failed            | Android, iOS                 |
+| 11   | App Cancel                       | iOS                          |
+| 12   | Invalid Context                  | iOS                          |
+| 13   | Not Interactive                  | iOS                          |
+| 14   | Passcode Not Set                 | Android, iOS                 |
+| 15   | System Cancel                    | Android, iOS                 |
+| 16   | User Cancel                      | Android, iOS                 |
+| 17   | User Fallback                    | Android, iOS                 |
+| 21   | No Protected Credentials/Data Found | Android, iOS                 |
+
+**Code 21 (`getSecureCredentials`, `getSecureData`)** — Stable, expected rejection when no biometric-protected credentials or data exist (for example after deletion, a fresh install, or items invalidated by biometric enrollment changes). Platform messages differ slightly:
+
+- **`getSecureCredentials()`**
+  - **Android:** `No protected credentials found`
+  - **iOS:** `No protected credentials found for server`
+- **`getSecureData()`**
+  - **Android:** `No protected data found`
+  - **iOS:** `No protected data found for key`
+
+`isCredentialsSaved()` and `isDataSaved()` return true when any credentials or data exist for the server or key (protected or unprotected), so they do not guarantee that `getSecureCredentials()` or `getSecureData()` will succeed. Handle code `21` in your catch block, or only call after storing with `accessControl` BIOMETRY_CURRENT_SET or BIOMETRY_ANY. See [`getSecureCredentials()`](#getsecurecredentials) and [`getSecureData()`](#getsecuredata) for details.
 
 <docgen-index>
 
@@ -436,6 +448,17 @@ Credentials must have been stored with accessControl set to BIOMETRY_CURRENT_SET
 
 On iOS, the system automatically shows the biometric prompt when accessing the protected Keychain item.
 On Android, BiometricPrompt is shown with a CryptoObject bound to the credential decryption key.
+
+If no protected credentials exist for the server, the promise rejects with code `21`
+(<a href="#biometricautherror">`BiometricAuthError.NO_PROTECTED_CREDENTIALS_FOUND`</a>). This is stable, expected
+behavior — for example when credentials were never saved with biometric protection,
+were deleted, or were invalidated after biometric enrollment changes.
+`isCredentialsSaved()` returns true when any credentials (protected or unprotected) exist,
+so it does not guarantee a biometric-protected entry is present — handle code `21` in
+your catch block or only call after storing with `accessControl` BIOMETRY_CURRENT_SET
+or BIOMETRY_ANY.
+Platform messages: Android `No protected credentials found`, iOS
+`No protected credentials found for server`.
 
 | Param         | Type                                                                                |
 | ------------- | ----------------------------------------------------------------------------------- |
@@ -785,21 +808,22 @@ Callback type for biometry change listener
 
 #### BiometricAuthError
 
-| Members                       | Value           | Description                                                                           |
-| ----------------------------- | --------------- | ------------------------------------------------------------------------------------- |
-| **`UNKNOWN_ERROR`**           | <code>0</code>  | Unknown error occurred                                                                |
-| **`BIOMETRICS_UNAVAILABLE`**  | <code>1</code>  | Biometrics are unavailable (no hardware or hardware error) Platform: Android, iOS     |
-| **`USER_LOCKOUT`**            | <code>2</code>  | User has been locked out due to too many failed attempts Platform: Android, iOS       |
-| **`BIOMETRICS_NOT_ENROLLED`** | <code>3</code>  | No biometrics are enrolled on the device Platform: Android, iOS                       |
-| **`USER_TEMPORARY_LOCKOUT`**  | <code>4</code>  | User is temporarily locked out (Android: 30 second lockout) Platform: Android         |
-| **`AUTHENTICATION_FAILED`**   | <code>10</code> | Authentication failed (user did not authenticate successfully) Platform: Android, iOS |
-| **`APP_CANCEL`**              | <code>11</code> | App canceled the authentication (iOS only) Platform: iOS                              |
-| **`INVALID_CONTEXT`**         | <code>12</code> | Invalid context (iOS only) Platform: iOS                                              |
-| **`NOT_INTERACTIVE`**         | <code>13</code> | Authentication was not interactive (iOS only) Platform: iOS                           |
-| **`PASSCODE_NOT_SET`**        | <code>14</code> | Passcode/PIN is not set on the device Platform: Android, iOS                          |
-| **`SYSTEM_CANCEL`**           | <code>15</code> | System canceled the authentication (e.g., due to screen lock) Platform: Android, iOS  |
-| **`USER_CANCEL`**             | <code>16</code> | User canceled the authentication Platform: Android, iOS                               |
-| **`USER_FALLBACK`**           | <code>17</code> | User chose to use fallback authentication method Platform: Android, iOS               |
+| Members                              | Value           | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Since |
+| ------------------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **`UNKNOWN_ERROR`**                  | <code>0</code>  | Unknown error occurred                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |       |
+| **`BIOMETRICS_UNAVAILABLE`**         | <code>1</code>  | Biometrics are unavailable (no hardware or hardware error) Platform: Android, iOS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |       |
+| **`USER_LOCKOUT`**                   | <code>2</code>  | User has been locked out due to too many failed attempts Platform: Android, iOS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |       |
+| **`BIOMETRICS_NOT_ENROLLED`**        | <code>3</code>  | No biometrics are enrolled on the device Platform: Android, iOS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |       |
+| **`USER_TEMPORARY_LOCKOUT`**         | <code>4</code>  | User is temporarily locked out (Android: 30 second lockout) Platform: Android                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |       |
+| **`AUTHENTICATION_FAILED`**          | <code>10</code> | Authentication failed (user did not authenticate successfully) Platform: Android, iOS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |       |
+| **`APP_CANCEL`**                     | <code>11</code> | App canceled the authentication (iOS only) Platform: iOS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |       |
+| **`INVALID_CONTEXT`**                | <code>12</code> | Invalid context (iOS only) Platform: iOS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |       |
+| **`NOT_INTERACTIVE`**                | <code>13</code> | Authentication was not interactive (iOS only) Platform: iOS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |       |
+| **`PASSCODE_NOT_SET`**               | <code>14</code> | Passcode/PIN is not set on the device Platform: Android, iOS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |       |
+| **`SYSTEM_CANCEL`**                  | <code>15</code> | System canceled the authentication (e.g., due to screen lock) Platform: Android, iOS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |       |
+| **`USER_CANCEL`**                    | <code>16</code> | User canceled the authentication Platform: Android, iOS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |       |
+| **`USER_FALLBACK`**                  | <code>17</code> | User chose to use fallback authentication method Platform: Android, iOS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |       |
+| **`NO_PROTECTED_CREDENTIALS_FOUND`** | <code>21</code> | No biometric-protected credentials or data exist for the requested server or key. Platform: Android, iOS (`getSecureCredentials()`, `getSecureData()`). Thrown when `getSecureCredentials()` or `getSecureData()` is called but nothing was stored with `accessControl` BIOMETRY_CURRENT_SET or BIOMETRY_ANY — for example after deletion, a fresh install, or items removed from the secure enclave after biometric enrollment changes. Rejection message differs by platform and method: - `getSecureCredentials()`: Android `No protected credentials found`, iOS `No protected credentials found for server` - `getSecureData()`: Android `No protected data found`, iOS `No protected data found for key` | 8.4.0 |
 
 
 #### AccessControl
