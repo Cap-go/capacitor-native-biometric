@@ -556,6 +556,7 @@ public class NativeBiometric extends Plugin {
                 editor.remove("secure_" + KEY_ALIAS);
                 editor.remove("secure_" + KEY_ALIAS + "_validity");
                 editor.remove("secure_" + KEY_ALIAS + "_auth_scheme");
+                editor.remove("secure_" + KEY_ALIAS + "_access_control");
                 editor.apply();
 
                 try {
@@ -730,6 +731,7 @@ public class NativeBiometric extends Plugin {
             editor.remove("secure_" + storageKey);
             editor.remove("secure_" + storageKey + "_validity");
             editor.remove("secure_" + storageKey + "_auth_scheme");
+            editor.remove("secure_" + storageKey + "_access_control");
             editor.apply();
 
             try {

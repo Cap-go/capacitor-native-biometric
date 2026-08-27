@@ -42,6 +42,7 @@ public class AuthActivity extends AppCompatActivity {
     private static final String SHARED_PREFS_NAME = "NativeBiometricSharedPreferences";
     private static final String SECURE_VALIDITY_SUFFIX = "_validity";
     private static final String SECURE_AUTH_SCHEME_SUFFIX = "_auth_scheme";
+    private static final String SECURE_ACCESS_CONTROL_SUFFIX = "_access_control";
 
     private BiometricPrompt biometricPrompt;
     private Cipher authCipher;
@@ -271,7 +272,7 @@ public class AuthActivity extends AppCompatActivity {
         }
         SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
         int storedScheme = prefs.getInt(AUTH_KEY_AUTH_TYPES_SCHEME, 0);
-        if (keyStore.containsAlias(AUTH_KEY_ALIAS) && storedScheme < BiometricAuthenticatorConfig.KEY_AUTH_TYPES_SCHEME_VERSION) {
+        if (keyStore.containsAlias(AUTH_KEY_ALIAS) && shouldRegenerateAuthKey(storedScheme)) {
             keyStore.deleteEntry(AUTH_KEY_ALIAS);
         }
         int expectedAuthTypes = getAuthKeyTypes();
@@ -374,10 +375,9 @@ public class AuthActivity extends AppCompatActivity {
 
         if (ks.containsAlias(alias)) {
             int storedScheme = getStoredCredentialAuthScheme(server);
-            if (storedScheme < BiometricAuthenticatorConfig.KEY_AUTH_TYPES_SCHEME_VERSION) {
-                // Pre-mapping keys used plugin flags as KeyProperties values; ciphertext cannot be
-                // migrated in place, so drop the legacy key and stored payload and let the caller
-                // re-enroll via setSecureCredentials / setSecureData.
+            if (storedScheme > 0 && storedScheme < BiometricAuthenticatorConfig.KEY_AUTH_TYPES_SCHEME_VERSION) {
+                // Only keys explicitly tagged with an outdated scheme are recovered here. Missing
+                // metadata (0) may be a pre-API-30 key that never used setUserAuthenticationParameters.
                 recoverCredentialKeyFromLegacyScheme(server, ks);
             } else if (getStoredAuthValidityDuration(server) != authValidityDuration) {
                 // If the caller asked for a different auth model than the one the existing key was
@@ -385,12 +385,16 @@ public class AuthActivity extends AppCompatActivity {
                 // regenerated so the new setUserAuthenticationParameters() take effect — Keystore
                 // does not allow changing these parameters on an existing key.
                 ks.deleteEntry(alias);
+            } else if (accessControl > 0 && getStoredAccessControl(server) != accessControl) {
+                ks.deleteEntry(alias);
+                getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit().remove("secure_" + server).apply();
             } else {
                 return (SecretKey) ks.getKey(alias, null);
             }
         }
 
-        boolean invalidatedByEnrollment = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && accessControl == 1;
+        int effectiveAccessControl = resolveAccessControl(server, accessControl);
+        boolean invalidatedByEnrollment = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && effectiveAccessControl == 1;
         SecretKey key;
         try {
             key = buildCredentialKey(alias, invalidatedByEnrollment, authValidityDuration);
@@ -411,7 +415,27 @@ public class AuthActivity extends AppCompatActivity {
         }
         storeAuthValidityDuration(server, authValidityDuration);
         storeCredentialAuthScheme(server, BiometricAuthenticatorConfig.KEY_AUTH_TYPES_SCHEME_VERSION);
+        if (accessControl > 0) {
+            storeAccessControl(server, accessControl);
+        }
         return key;
+    }
+
+    private boolean shouldRegenerateAuthKey(int storedScheme) {
+        if (storedScheme > 0 && storedScheme < BiometricAuthenticatorConfig.KEY_AUTH_TYPES_SCHEME_VERSION) {
+            return true;
+        }
+        // Missing metadata on API 30+ may mean the plugin KEY_AUTH_* flags were passed straight
+        // through to setUserAuthenticationParameters. Pre-API-30 keys also lack metadata but used
+        // setUserAuthenticationValidityDurationSeconds instead, so only regenerate on API 30+.
+        return storedScheme == 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R;
+    }
+
+    private int resolveAccessControl(String server, int accessControl) {
+        if (accessControl > 0) {
+            return accessControl;
+        }
+        return getStoredAccessControl(server);
     }
 
     private void recoverCredentialKeyFromLegacyScheme(String server, KeyStore keyStore) throws GeneralSecurityException, IOException {
@@ -423,6 +447,7 @@ public class AuthActivity extends AppCompatActivity {
         editor.remove("secure_" + server);
         editor.remove("secure_" + server + SECURE_VALIDITY_SUFFIX);
         editor.remove("secure_" + server + SECURE_AUTH_SCHEME_SUFFIX);
+        editor.remove("secure_" + server + SECURE_ACCESS_CONTROL_SUFFIX);
         editor.apply();
     }
 
@@ -775,10 +800,21 @@ public class AuthActivity extends AppCompatActivity {
         return getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).getInt("secure_" + server + SECURE_AUTH_SCHEME_SUFFIX, 0);
     }
 
+    private int getStoredAccessControl(String server) {
+        return getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).getInt("secure_" + server + SECURE_ACCESS_CONTROL_SUFFIX, 0);
+    }
+
     private void storeCredentialAuthScheme(String server, int schemeVersion) {
         getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE)
             .edit()
             .putInt("secure_" + server + SECURE_AUTH_SCHEME_SUFFIX, schemeVersion)
+            .apply();
+    }
+
+    private void storeAccessControl(String server, int accessControl) {
+        getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putInt("secure_" + server + SECURE_ACCESS_CONTROL_SUFFIX, accessControl)
             .apply();
     }
 }
