@@ -6,6 +6,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyInfo;
 import android.security.keystore.KeyPermanentlyInvalidatedException;
 import android.security.keystore.KeyProperties;
 import android.security.keystore.UserNotAuthenticatedException;
@@ -30,6 +31,7 @@ import java.util.concurrent.Executor;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
 import org.json.JSONObject;
 
@@ -41,6 +43,8 @@ public class AuthActivity extends AppCompatActivity {
     private static final int CREDENTIAL_GCM_IV_LENGTH = 12;
     private static final String SHARED_PREFS_NAME = "NativeBiometricSharedPreferences";
     private static final String SECURE_VALIDITY_SUFFIX = "_validity";
+    private static final String SECURE_AUTH_SCHEME_SUFFIX = "_auth_scheme";
+    private static final String SECURE_ACCESS_CONTROL_SUFFIX = "_access_control";
 
     private BiometricPrompt biometricPrompt;
     private Cipher authCipher;
@@ -50,6 +54,7 @@ public class AuthActivity extends AppCompatActivity {
     private int authValidityDuration;
     private BiometricAuthenticatorConfig authenticatorConfig;
     private static final String AUTH_KEY_AUTH_TYPES = "auth_key_auth_types";
+    private static final String AUTH_KEY_AUTH_TYPES_SCHEME = "auth_key_auth_types_scheme";
 
     // Mirrors KeyProperties auth-type flags when older compile stubs omit symbols.
     private static final int KEY_AUTH_BIOMETRIC_STRONG = 1;
@@ -267,14 +272,20 @@ public class AuthActivity extends AppCompatActivity {
         } catch (CertificateException e) {
             throw new GeneralSecurityException("Failed to load AndroidKeyStore", e);
         }
+        SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+        int storedScheme = prefs.getInt(AUTH_KEY_AUTH_TYPES_SCHEME, 0);
+        if (keyStore.containsAlias(AUTH_KEY_ALIAS) && shouldRegenerateAuthKey(storedScheme)) {
+            keyStore.deleteEntry(AUTH_KEY_ALIAS);
+        }
         int expectedAuthTypes = getAuthKeyTypes();
-        int storedAuthTypes = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).getInt(AUTH_KEY_AUTH_TYPES, -1);
+        int storedAuthTypes = prefs.getInt(AUTH_KEY_AUTH_TYPES, -1);
         if (keyStore.containsAlias(AUTH_KEY_ALIAS) && storedAuthTypes != expectedAuthTypes) {
             keyStore.deleteEntry(AUTH_KEY_ALIAS);
         }
         if (!keyStore.containsAlias(AUTH_KEY_ALIAS)) {
             generateSecretKey();
             storeAuthKeyTypes(expectedAuthTypes);
+            storeAuthKeyTypesScheme(BiometricAuthenticatorConfig.KEY_AUTH_TYPES_SCHEME_VERSION);
         }
         try {
             return (SecretKey) keyStore.getKey(AUTH_KEY_ALIAS, null);
@@ -312,7 +323,7 @@ public class AuthActivity extends AppCompatActivity {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             int authTypes = keyAuthTypes > 0 ? keyAuthTypes : defaultKeyAuthTypes();
-            builder.setUserAuthenticationParameters(0, authTypes);
+            builder.setUserAuthenticationParameters(0, BiometricAuthenticatorConfig.toKeyPropertiesAuthTypes(authTypes));
         } else {
             // Use -1 for per-operation authentication, required for BiometricPrompt CryptoObject binding.
             // A positive value creates a time-based key that throws UserNotAuthenticatedException
@@ -365,18 +376,39 @@ public class AuthActivity extends AppCompatActivity {
         ks.load(null);
 
         if (ks.containsAlias(alias)) {
-            // If the caller asked for a different auth model than the one the existing key was
-            // generated with (per-operation vs. time-based validity window), the key must be
-            // regenerated so the new setUserAuthenticationParameters() take effect — Keystore
-            // does not allow changing these parameters on an existing key.
-            if (getStoredAuthValidityDuration(server) != authValidityDuration) {
+            int storedScheme = getStoredCredentialAuthScheme(server);
+            Integer keystoreAuthType = null;
+            Integer validityDurationSeconds = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                CredentialKeyAuthInfo info = readCredentialKeyAuthInfo(ks, alias);
+                keystoreAuthType = info.authType;
+                validityDurationSeconds = info.validityDurationSeconds;
+            }
+            if (
+                BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(
+                    storedScheme,
+                    Build.VERSION.SDK_INT,
+                    keystoreAuthType,
+                    validityDurationSeconds
+                )
+            ) {
+                recoverCredentialKeyFromLegacyScheme(server, ks);
+            } else if (getStoredAuthValidityDuration(server) != authValidityDuration) {
+                // If the caller asked for a different auth model than the one the existing key was
+                // generated with (per-operation vs. time-based validity window), the key must be
+                // regenerated so the new setUserAuthenticationParameters() take effect — Keystore
+                // does not allow changing these parameters on an existing key.
                 ks.deleteEntry(alias);
+            } else if (accessControl > 0 && getStoredAccessControl(server) != accessControl) {
+                ks.deleteEntry(alias);
+                getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit().remove("secure_" + server).apply();
             } else {
                 return (SecretKey) ks.getKey(alias, null);
             }
         }
 
-        boolean invalidatedByEnrollment = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && accessControl == 1;
+        int effectiveAccessControl = resolveAccessControl(server, accessControl);
+        boolean invalidatedByEnrollment = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && effectiveAccessControl == 1;
         SecretKey key;
         try {
             key = buildCredentialKey(alias, invalidatedByEnrollment, authValidityDuration);
@@ -396,7 +428,72 @@ public class AuthActivity extends AppCompatActivity {
             }
         }
         storeAuthValidityDuration(server, authValidityDuration);
+        storeCredentialAuthScheme(server, BiometricAuthenticatorConfig.KEY_AUTH_TYPES_SCHEME_VERSION);
+        if (accessControl > 0) {
+            storeAccessControl(server, accessControl);
+        }
         return key;
+    }
+
+    private boolean shouldRegenerateAuthKey(int storedScheme) {
+        if (storedScheme > 0 && storedScheme < BiometricAuthenticatorConfig.KEY_AUTH_TYPES_SCHEME_VERSION) {
+            return true;
+        }
+        // Missing metadata on API 30+ may mean the plugin KEY_AUTH_* flags were passed straight
+        // through to setUserAuthenticationParameters. Pre-API-30 keys also lack metadata but used
+        // setUserAuthenticationValidityDurationSeconds instead, so only regenerate on API 30+.
+        return storedScheme == 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R;
+    }
+
+    private int resolveAccessControl(String server, int accessControl) {
+        if (accessControl > 0) {
+            return accessControl;
+        }
+        return getStoredAccessControl(server);
+    }
+
+    private static final class CredentialKeyAuthInfo {
+
+        final Integer authType;
+        final Integer validityDurationSeconds;
+
+        CredentialKeyAuthInfo(Integer authType, Integer validityDurationSeconds) {
+            this.authType = authType;
+            this.validityDurationSeconds = validityDurationSeconds;
+        }
+    }
+
+    private CredentialKeyAuthInfo readCredentialKeyAuthInfo(KeyStore keyStore, String alias) {
+        try {
+            SecretKey key = (SecretKey) keyStore.getKey(alias, null);
+            if (key == null) {
+                return new CredentialKeyAuthInfo(null, null);
+            }
+            SecretKeyFactory factory = SecretKeyFactory.getInstance(key.getAlgorithm(), "AndroidKeyStore");
+            KeyInfo info = (KeyInfo) factory.getKeySpec(key, KeyInfo.class);
+            Integer authType = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                authType = info.getUserAuthenticationType();
+            }
+            return new CredentialKeyAuthInfo(authType, info.getUserAuthenticationValidityDurationSeconds());
+        } catch (GeneralSecurityException | RuntimeException e) {
+            // Unreadable KeyInfo: treat as unconfirmed so the caller recovers rather than
+            // keeping a key that a strong-biometric prompt cannot satisfy.
+            return new CredentialKeyAuthInfo(null, null);
+        }
+    }
+
+    private void recoverCredentialKeyFromLegacyScheme(String server, KeyStore keyStore) throws GeneralSecurityException, IOException {
+        String alias = SECURE_KEY_PREFIX + server;
+        if (keyStore.containsAlias(alias)) {
+            keyStore.deleteEntry(alias);
+        }
+        SharedPreferences.Editor editor = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit();
+        editor.remove("secure_" + server);
+        editor.remove("secure_" + server + SECURE_VALIDITY_SUFFIX);
+        editor.remove("secure_" + server + SECURE_AUTH_SCHEME_SUFFIX);
+        editor.remove("secure_" + server + SECURE_ACCESS_CONTROL_SUFFIX);
+        editor.apply();
     }
 
     private SecretKey buildCredentialKey(String alias, boolean invalidatedByEnrollment, int authValidityDuration)
@@ -415,7 +512,10 @@ public class AuthActivity extends AppCompatActivity {
             if (authTypes == 0) {
                 authTypes = defaultKeyAuthTypes();
             }
-            builder.setUserAuthenticationParameters(Math.max(0, authValidityDuration), authTypes);
+            builder.setUserAuthenticationParameters(
+                Math.max(0, authValidityDuration),
+                BiometricAuthenticatorConfig.toKeyPropertiesAuthTypes(authTypes)
+            );
         } else if (authValidityDuration > 0) {
             builder.setUserAuthenticationValidityDurationSeconds(authValidityDuration);
         } else {
@@ -735,5 +835,31 @@ public class AuthActivity extends AppCompatActivity {
 
     private void storeAuthKeyTypes(int authTypes) {
         getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit().putInt(AUTH_KEY_AUTH_TYPES, authTypes).apply();
+    }
+
+    private void storeAuthKeyTypesScheme(int schemeVersion) {
+        getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit().putInt(AUTH_KEY_AUTH_TYPES_SCHEME, schemeVersion).apply();
+    }
+
+    private int getStoredCredentialAuthScheme(String server) {
+        return getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).getInt("secure_" + server + SECURE_AUTH_SCHEME_SUFFIX, 0);
+    }
+
+    private int getStoredAccessControl(String server) {
+        return getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).getInt("secure_" + server + SECURE_ACCESS_CONTROL_SUFFIX, 0);
+    }
+
+    private void storeCredentialAuthScheme(String server, int schemeVersion) {
+        getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putInt("secure_" + server + SECURE_AUTH_SCHEME_SUFFIX, schemeVersion)
+            .apply();
+    }
+
+    private void storeAccessControl(String server, int accessControl) {
+        getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putInt("secure_" + server + SECURE_ACCESS_CONTROL_SUFFIX, accessControl)
+            .apply();
     }
 }

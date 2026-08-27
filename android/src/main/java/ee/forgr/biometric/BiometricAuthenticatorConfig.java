@@ -2,6 +2,7 @@ package ee.forgr.biometric;
 
 import android.os.Build;
 import android.security.keystore.KeyProperties;
+import androidx.annotation.RequiresApi;
 import androidx.biometric.BiometricManager;
 
 /**
@@ -23,6 +24,13 @@ public final class BiometricAuthenticatorConfig {
 
     public static final int PROMPT_BIOMETRIC_ANY =
         BiometricManager.Authenticators.BIOMETRIC_STRONG | BiometricManager.Authenticators.BIOMETRIC_WEAK;
+
+    /**
+     * Stored alongside Keystore auth-key metadata. Version 0 (missing) means plugin {@code KEY_AUTH_*}
+     * flags were passed straight into {@code setUserAuthenticationParameters}; version 1 maps through
+     * {@link #toKeyPropertiesAuthTypes(int)} first.
+     */
+    public static final int KEY_AUTH_TYPES_SCHEME_VERSION = 1;
 
     public final int promptAuthenticators;
     public final int keyAuthTypes;
@@ -154,5 +162,74 @@ public final class BiometricAuthenticatorConfig {
             return KEY_AUTH_DEVICE_CREDENTIAL;
         }
         return 0;
+    }
+
+    /**
+     * Translates this class's {@code KEY_AUTH_*} flags into the {@code KeyProperties.AUTH_*} values
+     * that {@code KeyGenParameterSpec.Builder#setUserAuthenticationParameters} expects. The two sets
+     * use different bit values ({@code KEY_AUTH_BIOMETRIC_STRONG} is 1, but
+     * {@code KeyProperties.AUTH_DEVICE_CREDENTIAL} is 1 and {@code AUTH_BIOMETRIC_STRONG} is 2), so
+     * passing the plugin flags straight through mints a device-credential key for a
+     * biometric-only request — a biometric auth token then cannot satisfy it, and Android exempts
+     * such keys from biometric-enrollment invalidation.
+     * <p>
+     * Keystore keys can only be bound to Class 3 (Strong) biometrics, so {@code KEY_AUTH_BIOMETRIC_WEAK}
+     * collapses to {@code AUTH_BIOMETRIC_STRONG}.
+     */
+    @RequiresApi(Build.VERSION_CODES.R)
+    static int toKeyPropertiesAuthTypes(int pluginTypes) {
+        int types = 0;
+        if ((pluginTypes & (KEY_AUTH_BIOMETRIC_STRONG | KEY_AUTH_BIOMETRIC_WEAK)) != 0) {
+            types |= KeyProperties.AUTH_BIOMETRIC_STRONG;
+        }
+        if ((pluginTypes & KEY_AUTH_DEVICE_CREDENTIAL) != 0) {
+            types |= KeyProperties.AUTH_DEVICE_CREDENTIAL;
+        }
+        return types == 0 ? KeyProperties.AUTH_BIOMETRIC_STRONG : types;
+    }
+
+    /**
+     * Whether a stored credential Keystore key should be recovered (deleted and its ciphertext
+     * dropped) because it may have been minted with unmapped plugin {@code KEY_AUTH_*} flags.
+     * <p>
+     * Missing scheme metadata ({@code 0}) is ambiguous: pre-API-30 keys never called
+     * {@code setUserAuthenticationParameters}, while API 30+ keys created before the mapping
+     * passed plugin {@code KEY_AUTH_BIOMETRIC_STRONG} ({@code 1}) straight through, which Keystore
+     * interprets as {@code AUTH_DEVICE_CREDENTIAL}. Preserve the key only when a pre-API-30
+     * authentication configuration is confirmed; otherwise recover. Explicitly outdated scheme
+     * versions are always recovered.
+     *
+     * @param storedScheme persisted scheme version, or 0 if missing
+     * @param sdkInt {@code Build.VERSION.SDK_INT}
+     * @param keystoreAuthType {@code KeyInfo.getUserAuthenticationType()}, or null if unknown
+     * @param validityDurationSeconds {@code KeyInfo.getUserAuthenticationValidityDurationSeconds()},
+     *     or null if unknown. The old API stores {@code -1} for per-operation keys; the new API stores {@code 0}.
+     */
+    static boolean shouldRecoverLegacyCredentialKey(
+        int storedScheme,
+        int sdkInt,
+        Integer keystoreAuthType,
+        Integer validityDurationSeconds
+    ) {
+        if (storedScheme >= KEY_AUTH_TYPES_SCHEME_VERSION) {
+            return false;
+        }
+        if (storedScheme > 0) {
+            return true;
+        }
+        // storedScheme == 0: missing metadata.
+        if (sdkInt < Build.VERSION_CODES.R) {
+            return false;
+        }
+        // Confirmed pre-API-30 per-operation key (setUserAuthenticationValidityDurationSeconds(-1)).
+        if (validityDurationSeconds != null && validityDurationSeconds == -1) {
+            return false;
+        }
+        // Confirmed biometric (or biometric+PIN) configuration: pre-API-30 time-based keys and
+        // already-mapped API 30+ keys. Unmapped plugin STRONG (1) is DEVICE_CREDENTIAL-only.
+        if (keystoreAuthType != null && (keystoreAuthType & KeyProperties.AUTH_BIOMETRIC_STRONG) != 0) {
+            return false;
+        }
+        return true;
     }
 }
