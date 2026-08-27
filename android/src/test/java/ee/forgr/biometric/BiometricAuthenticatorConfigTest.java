@@ -125,4 +125,59 @@ public class BiometricAuthenticatorConfigTest {
     public void keyAuthTypesSchemeVersion_isPositive() {
         assertTrue(BiometricAuthenticatorConfig.KEY_AUTH_TYPES_SCHEME_VERSION > 0);
     }
+
+    @Test
+    public void currentScheme_isNotRecovered() {
+        assertFalse(
+            BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(
+                BiometricAuthenticatorConfig.KEY_AUTH_TYPES_SCHEME_VERSION,
+                30,
+                KeyProperties.AUTH_DEVICE_CREDENTIAL,
+                0
+            )
+        );
+    }
+
+    @Test
+    public void missingScheme_onPreApi30_isPreserved() {
+        assertFalse(BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(0, 29, null, null));
+    }
+
+    @Test
+    public void missingScheme_preApi30PerOperationKey_isPreserved() {
+        assertFalse(
+            BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(0, 30, KeyProperties.AUTH_BIOMETRIC_STRONG, -1)
+        );
+    }
+
+    @Test
+    public void missingScheme_biometricStrongKey_isPreserved() {
+        assertFalse(
+            BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(0, 30, KeyProperties.AUTH_BIOMETRIC_STRONG, 0)
+        );
+    }
+
+    @Test
+    public void missingScheme_preApi30TimeBasedKey_isPreserved() {
+        assertFalse(
+            BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(
+                0,
+                30,
+                KeyProperties.AUTH_BIOMETRIC_STRONG | KeyProperties.AUTH_DEVICE_CREDENTIAL,
+                30
+            )
+        );
+    }
+
+    @Test
+    public void missingScheme_unmappedStrongAsDeviceCredential_isRecovered() {
+        assertTrue(
+            BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(0, 30, KeyProperties.AUTH_DEVICE_CREDENTIAL, 0)
+        );
+    }
+
+    @Test
+    public void missingScheme_unreadableKeyInfoOnApi30_isRecovered() {
+        assertTrue(BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(0, 30, null, null));
+    }
 }
