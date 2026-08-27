@@ -145,16 +145,12 @@ public class BiometricAuthenticatorConfigTest {
 
     @Test
     public void missingScheme_preApi30PerOperationKey_isPreserved() {
-        assertFalse(
-            BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(0, 30, KeyProperties.AUTH_BIOMETRIC_STRONG, -1)
-        );
+        assertFalse(BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(0, 30, KeyProperties.AUTH_BIOMETRIC_STRONG, -1));
     }
 
     @Test
     public void missingScheme_biometricStrongKey_isPreserved() {
-        assertFalse(
-            BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(0, 30, KeyProperties.AUTH_BIOMETRIC_STRONG, 0)
-        );
+        assertFalse(BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(0, 30, KeyProperties.AUTH_BIOMETRIC_STRONG, 0));
     }
 
     @Test
@@ -171,9 +167,7 @@ public class BiometricAuthenticatorConfigTest {
 
     @Test
     public void missingScheme_unmappedStrongAsDeviceCredential_isRecovered() {
-        assertTrue(
-            BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(0, 30, KeyProperties.AUTH_DEVICE_CREDENTIAL, 0)
-        );
+        assertTrue(BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(0, 30, KeyProperties.AUTH_DEVICE_CREDENTIAL, 0));
     }
 
     @Test
