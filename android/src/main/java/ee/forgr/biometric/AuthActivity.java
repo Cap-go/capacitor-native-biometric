@@ -312,7 +312,7 @@ public class AuthActivity extends AppCompatActivity {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             int authTypes = keyAuthTypes > 0 ? keyAuthTypes : defaultKeyAuthTypes();
-            builder.setUserAuthenticationParameters(0, authTypes);
+            builder.setUserAuthenticationParameters(0, BiometricAuthenticatorConfig.toKeyPropertiesAuthTypes(authTypes));
         } else {
             // Use -1 for per-operation authentication, required for BiometricPrompt CryptoObject binding.
             // A positive value creates a time-based key that throws UserNotAuthenticatedException
@@ -415,7 +415,10 @@ public class AuthActivity extends AppCompatActivity {
             if (authTypes == 0) {
                 authTypes = defaultKeyAuthTypes();
             }
-            builder.setUserAuthenticationParameters(Math.max(0, authValidityDuration), authTypes);
+            builder.setUserAuthenticationParameters(
+                Math.max(0, authValidityDuration),
+                BiometricAuthenticatorConfig.toKeyPropertiesAuthTypes(authTypes)
+            );
         } else if (authValidityDuration > 0) {
             builder.setUserAuthenticationValidityDurationSeconds(authValidityDuration);
         } else {

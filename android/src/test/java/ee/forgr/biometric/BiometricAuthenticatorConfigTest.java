@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import android.security.keystore.KeyProperties;
 import androidx.biometric.BiometricManager;
 import org.junit.Test;
 
@@ -92,5 +93,31 @@ public class BiometricAuthenticatorConfigTest {
 
         assertEquals(BiometricAuthenticatorConfig.PROMPT_BIOMETRIC_ANY, face.promptAuthenticators);
         assertEquals(BiometricManager.Authenticators.BIOMETRIC_STRONG, config.promptAuthenticators);
+    }
+
+    @Test
+    public void keyAuthStrong_mapsToKeyPropertiesBiometricStrong() {
+        // Plugin flag 1 is NOT KeyProperties.AUTH_DEVICE_CREDENTIAL (also 1).
+        assertEquals(KeyProperties.AUTH_BIOMETRIC_STRONG, BiometricAuthenticatorConfig.toKeyPropertiesAuthTypes(1));
+    }
+
+    @Test
+    public void keyAuthWeak_collapsesToBiometricStrong() {
+        assertEquals(KeyProperties.AUTH_BIOMETRIC_STRONG, BiometricAuthenticatorConfig.toKeyPropertiesAuthTypes(2));
+        assertEquals(KeyProperties.AUTH_BIOMETRIC_STRONG, BiometricAuthenticatorConfig.toKeyPropertiesAuthTypes(1 | 2));
+    }
+
+    @Test
+    public void keyAuthDeviceCredential_mapsToKeyPropertiesDeviceCredential() {
+        assertEquals(KeyProperties.AUTH_DEVICE_CREDENTIAL, BiometricAuthenticatorConfig.toKeyPropertiesAuthTypes(4));
+        assertEquals(
+            KeyProperties.AUTH_BIOMETRIC_STRONG | KeyProperties.AUTH_DEVICE_CREDENTIAL,
+            BiometricAuthenticatorConfig.toKeyPropertiesAuthTypes(1 | 4)
+        );
+    }
+
+    @Test
+    public void keyAuthZero_fallsBackToBiometricStrong() {
+        assertEquals(KeyProperties.AUTH_BIOMETRIC_STRONG, BiometricAuthenticatorConfig.toKeyPropertiesAuthTypes(0));
     }
 }
