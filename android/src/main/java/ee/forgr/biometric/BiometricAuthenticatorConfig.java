@@ -25,6 +25,13 @@ public final class BiometricAuthenticatorConfig {
     public static final int PROMPT_BIOMETRIC_ANY =
         BiometricManager.Authenticators.BIOMETRIC_STRONG | BiometricManager.Authenticators.BIOMETRIC_WEAK;
 
+    /**
+     * Stored alongside Keystore auth-key metadata. Version 0 (missing) means plugin {@code KEY_AUTH_*}
+     * flags were passed straight into {@code setUserAuthenticationParameters}; version 1 maps through
+     * {@link #toKeyPropertiesAuthTypes(int)} first.
+     */
+    public static final int KEY_AUTH_TYPES_SCHEME_VERSION = 1;
+
     public final int promptAuthenticators;
     public final int keyAuthTypes;
     public final boolean allowNegativeButton;

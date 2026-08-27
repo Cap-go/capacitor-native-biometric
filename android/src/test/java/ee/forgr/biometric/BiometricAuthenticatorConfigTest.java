@@ -120,4 +120,9 @@ public class BiometricAuthenticatorConfigTest {
     public void keyAuthZero_fallsBackToBiometricStrong() {
         assertEquals(KeyProperties.AUTH_BIOMETRIC_STRONG, BiometricAuthenticatorConfig.toKeyPropertiesAuthTypes(0));
     }
+
+    @Test
+    public void keyAuthTypesSchemeVersion_isPositive() {
+        assertTrue(BiometricAuthenticatorConfig.KEY_AUTH_TYPES_SCHEME_VERSION > 0);
+    }
 }
