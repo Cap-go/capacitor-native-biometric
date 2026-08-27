@@ -384,12 +384,14 @@ public class AuthActivity extends AppCompatActivity {
                 keystoreAuthType = info.authType;
                 validityDurationSeconds = info.validityDurationSeconds;
             }
-            if (BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(
-                storedScheme,
-                Build.VERSION.SDK_INT,
-                keystoreAuthType,
-                validityDurationSeconds
-            )) {
+            if (
+                BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(
+                    storedScheme,
+                    Build.VERSION.SDK_INT,
+                    keystoreAuthType,
+                    validityDurationSeconds
+                )
+            ) {
                 recoverCredentialKeyFromLegacyScheme(server, ks);
             } else if (getStoredAuthValidityDuration(server) != authValidityDuration) {
                 // If the caller asked for a different auth model than the one the existing key was
@@ -451,6 +453,7 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     private static final class CredentialKeyAuthInfo {
+
         final Integer authType;
         final Integer validityDurationSeconds;
 
