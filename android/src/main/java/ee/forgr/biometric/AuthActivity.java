@@ -6,6 +6,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyInfo;
 import android.security.keystore.KeyPermanentlyInvalidatedException;
 import android.security.keystore.KeyProperties;
 import android.security.keystore.UserNotAuthenticatedException;
@@ -30,6 +31,7 @@ import java.util.concurrent.Executor;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
 import org.json.JSONObject;
 
@@ -375,9 +377,21 @@ public class AuthActivity extends AppCompatActivity {
 
         if (ks.containsAlias(alias)) {
             int storedScheme = getStoredCredentialAuthScheme(server);
-            if (storedScheme > 0 && storedScheme < BiometricAuthenticatorConfig.KEY_AUTH_TYPES_SCHEME_VERSION) {
-                // Only keys explicitly tagged with an outdated scheme are recovered here. Missing
-                // metadata (0) may be a pre-API-30 key that never used setUserAuthenticationParameters.
+            Integer keystoreAuthType = null;
+            Integer validityDurationSeconds = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                CredentialKeyAuthInfo info = readCredentialKeyAuthInfo(ks, alias);
+                keystoreAuthType = info.authType;
+                validityDurationSeconds = info.validityDurationSeconds;
+            }
+            if (
+                BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(
+                    storedScheme,
+                    Build.VERSION.SDK_INT,
+                    keystoreAuthType,
+                    validityDurationSeconds
+                )
+            ) {
                 recoverCredentialKeyFromLegacyScheme(server, ks);
             } else if (getStoredAuthValidityDuration(server) != authValidityDuration) {
                 // If the caller asked for a different auth model than the one the existing key was
@@ -436,6 +450,37 @@ public class AuthActivity extends AppCompatActivity {
             return accessControl;
         }
         return getStoredAccessControl(server);
+    }
+
+    private static final class CredentialKeyAuthInfo {
+
+        final Integer authType;
+        final Integer validityDurationSeconds;
+
+        CredentialKeyAuthInfo(Integer authType, Integer validityDurationSeconds) {
+            this.authType = authType;
+            this.validityDurationSeconds = validityDurationSeconds;
+        }
+    }
+
+    private CredentialKeyAuthInfo readCredentialKeyAuthInfo(KeyStore keyStore, String alias) {
+        try {
+            SecretKey key = (SecretKey) keyStore.getKey(alias, null);
+            if (key == null) {
+                return new CredentialKeyAuthInfo(null, null);
+            }
+            SecretKeyFactory factory = SecretKeyFactory.getInstance(key.getAlgorithm(), "AndroidKeyStore");
+            KeyInfo info = (KeyInfo) factory.getKeySpec(key, KeyInfo.class);
+            Integer authType = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                authType = info.getUserAuthenticationType();
+            }
+            return new CredentialKeyAuthInfo(authType, info.getUserAuthenticationValidityDurationSeconds());
+        } catch (GeneralSecurityException | RuntimeException e) {
+            // Unreadable KeyInfo: treat as unconfirmed so the caller recovers rather than
+            // keeping a key that a strong-biometric prompt cannot satisfy.
+            return new CredentialKeyAuthInfo(null, null);
+        }
     }
 
     private void recoverCredentialKeyFromLegacyScheme(String server, KeyStore keyStore) throws GeneralSecurityException, IOException {

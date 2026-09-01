@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - renovate/**
+      - fix/android-key-auth-type-mapping
   pull_request:
     branches: [ main ]
   workflow_call:  # Allow this workflow to be called by other workflows
