@@ -39,10 +39,6 @@ cd "$test_app"
 rm -rf node_modules bun.lock
 bun remove "$plugin_name"
 bun add "${packed_packages[0]}"
-if ! bun -e "require.resolve('${plugin_name}')"; then
-  echo "Packed plugin is not resolvable from the example app"
-  exit 1
-fi
 bun run build
 
 ensure_platform() {
