@@ -34,8 +34,15 @@ fi
 plugin_name="$(bun -e 'console.log(require("./package.json").name)')"
 cp -R example-app/. "$test_app/"
 cd "$test_app"
+# example-app pins the plugin as file:../ for local dev; that path is invalid once
+# copied under RUNNER_TEMP, and bun.lock can leave a broken @.. install behind.
+rm -rf node_modules bun.lock
 bun remove "$plugin_name"
 bun add "${packed_packages[0]}"
+if ! bun -e "require.resolve('${plugin_name}')"; then
+  echo "Packed plugin is not resolvable from the example app"
+  exit 1
+fi
 bun run build
 
 ensure_platform() {
