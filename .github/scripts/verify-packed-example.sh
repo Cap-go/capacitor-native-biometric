@@ -34,6 +34,9 @@ fi
 plugin_name="$(bun -e 'console.log(require("./package.json").name)')"
 cp -R example-app/. "$test_app/"
 cd "$test_app"
+# example-app pins the plugin as file:../ for local dev; that path is invalid once
+# copied under RUNNER_TEMP, and bun.lock can leave a broken @.. install behind.
+rm -rf node_modules bun.lock
 bun remove "$plugin_name"
 bun add "${packed_packages[0]}"
 bun run build
