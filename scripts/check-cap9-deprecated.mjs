@@ -163,10 +163,11 @@ function collectScanRoots(pluginDir, pkg) {
     if (exists(androidMain)) roots.push(androidMain);
   }
   if (cap.ios) {
-    const iosSources = path.join(pluginDir, "ios", "Sources");
+    const iosSrc = typeof cap.ios === "object" && cap.ios.src ? cap.ios.src : "ios";
+    const iosSources = path.join(pluginDir, iosSrc, "Sources");
     if (exists(iosSources)) roots.push(iosSources);
     else {
-      const iosDir = path.join(pluginDir, "ios");
+      const iosDir = path.join(pluginDir, iosSrc);
       if (exists(iosDir)) roots.push(iosDir);
     }
   }
