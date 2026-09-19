@@ -86,7 +86,7 @@ final class AsymmetricSecureDataHelper {
      */
     static BiometricPrompt.CryptoObject createDecryptCryptoObject(Context context, String storageKey)
         throws GeneralSecurityException, IOException {
-        KeyStore.PrivateKeyEntry entry = getOrCreateKeyPair(context, storageKey, 0);
+        KeyStore.PrivateKeyEntry entry = getExistingPrivateKeyEntry(context, storageKey);
         Cipher cipher = Cipher.getInstance(RSA_TRANSFORMATION);
         try {
             cipher.init(Cipher.DECRYPT_MODE, entry.getPrivateKey(), oaepSpec());
@@ -144,9 +144,8 @@ final class AsymmetricSecureDataHelper {
             prefs.edit().remove("secure_" + storageKey).apply();
         }
 
-        KeyStore.PrivateKeyEntry entry = (KeyStore.PrivateKeyEntry) ks.getEntry(alias, null);
-        if (entry != null) {
-            return entry;
+        if (ks.containsAlias(alias)) {
+            return requirePrivateKeyEntry(ks, alias);
         }
 
         int effectiveAccessControl = accessControl > 0 ? accessControl : storedAccessControl;
@@ -155,12 +154,41 @@ final class AsymmetricSecureDataHelper {
             generateKeyPair(alias, invalidatedByEnrollment);
         } catch (ProviderException e) {
             if (invalidatedByEnrollment) {
-                generateKeyPair(alias, false);
+                try {
+                    generateKeyPair(alias, false);
+                } catch (ProviderException retryError) {
+                    throw new GeneralSecurityException("Keystore key generation failed", retryError);
+                }
             } else {
                 throw new GeneralSecurityException("Keystore key generation failed", e);
             }
         }
-        return (KeyStore.PrivateKeyEntry) ks.getEntry(alias, null);
+        return requirePrivateKeyEntry(ks, alias);
+    }
+
+    private static KeyStore.PrivateKeyEntry getExistingPrivateKeyEntry(Context context, String storageKey)
+        throws GeneralSecurityException, IOException {
+        String alias = asymmetricAlias(storageKey);
+        KeyStore ks = KeyStore.getInstance(ANDROID_KEY_STORE);
+        ks.load(null);
+        if (!ks.containsAlias(alias)) {
+            throw new GeneralSecurityException("Asymmetric key not found");
+        }
+        return requirePrivateKeyEntry(ks, alias);
+    }
+
+    private static KeyStore.PrivateKeyEntry requirePrivateKeyEntry(KeyStore ks, String alias) throws GeneralSecurityException {
+        try {
+            KeyStore.Entry entry = ks.getEntry(alias, null);
+            if (!(entry instanceof KeyStore.PrivateKeyEntry)) {
+                throw new GeneralSecurityException("Invalid key entry type");
+            }
+            return (KeyStore.PrivateKeyEntry) entry;
+        } catch (GeneralSecurityException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new GeneralSecurityException("Failed to load keystore key", e);
+        }
     }
 
     private static void generateKeyPair(String alias, boolean invalidatedByEnrollment) throws GeneralSecurityException {

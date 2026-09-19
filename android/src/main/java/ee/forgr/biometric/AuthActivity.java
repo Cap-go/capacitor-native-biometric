@@ -216,6 +216,9 @@ public class AuthActivity extends AppCompatActivity {
             cryptoObject = createCredentialEncryptCryptoObject();
         } else if ("getSecureData".equals(mode) && isAsymmetricSecureData(getIntent().getStringExtra("server"))) {
             cryptoObject = createAsymmetricDecryptCryptoObject();
+            if (isFinishing()) {
+                return;
+            }
         } else if ("getSecureCredentials".equals(mode) || "getSecureData".equals(mode)) {
             cryptoObject = createCredentialDecryptCryptoObject();
         } else {
@@ -622,6 +625,7 @@ public class AuthActivity extends AppCompatActivity {
             return AsymmetricSecureDataHelper.createDecryptCryptoObject(this, server);
         } catch (KeyPermanentlyInvalidatedException e) {
             cleanupInvalidatedAsymmetricData(getIntent().getStringExtra("server"));
+            finishActivity("error", 0, "Biometric enrollment changed");
             return null;
         } catch (GeneralSecurityException | IOException e) {
             return null;
