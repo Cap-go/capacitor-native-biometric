@@ -145,7 +145,15 @@ final class AsymmetricSecureDataHelper {
         }
 
         if (ks.containsAlias(alias)) {
-            return requirePrivateKeyEntry(ks, alias);
+            KeyStore.PrivateKeyEntry entry = requirePrivateKeyEntry(ks, alias);
+            try {
+                Cipher probe = Cipher.getInstance(RSA_TRANSFORMATION);
+                probe.init(Cipher.DECRYPT_MODE, entry.getPrivateKey(), oaepSpec());
+                return entry;
+            } catch (KeyPermanentlyInvalidatedException e) {
+                ks.deleteEntry(alias);
+                prefs.edit().remove("secure_" + storageKey).remove(secureFormatKey(storageKey)).apply();
+            }
         }
 
         int effectiveAccessControl = accessControl > 0 ? accessControl : storedAccessControl;
