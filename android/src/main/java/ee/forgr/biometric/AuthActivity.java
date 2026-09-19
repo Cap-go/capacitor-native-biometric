@@ -169,6 +169,8 @@ public class AuthActivity extends AppCompatActivity {
                         retryAfterPrompt();
                     } else if ("setSecureCredentials".equals(mode) || "setSecureData".equals(mode)) {
                         handleSetSecureCredentials(result);
+                    } else if ("getSecureData".equals(mode) && isAsymmetricSecureData(getIntent().getStringExtra("server"))) {
+                        handleGetSecureDataAsymmetric(result);
                     } else if ("getSecureCredentials".equals(mode) || "getSecureData".equals(mode)) {
                         handleGetSecureCredentials(result);
                     } else if ("verify".equals(mode)) {
@@ -212,6 +214,11 @@ public class AuthActivity extends AppCompatActivity {
         BiometricPrompt.CryptoObject cryptoObject;
         if ("setSecureCredentials".equals(mode) || "setSecureData".equals(mode)) {
             cryptoObject = createCredentialEncryptCryptoObject();
+        } else if ("getSecureData".equals(mode) && isAsymmetricSecureData(getIntent().getStringExtra("server"))) {
+            cryptoObject = createAsymmetricDecryptCryptoObject();
+            if (isFinishing()) {
+                return;
+            }
         } else if ("getSecureCredentials".equals(mode) || "getSecureData".equals(mode)) {
             cryptoObject = createCredentialDecryptCryptoObject();
         } else {
@@ -602,6 +609,62 @@ public class AuthActivity extends AppCompatActivity {
 
     private void handleGetSecureCredentials(BiometricPrompt.AuthenticationResult result) {
         decryptAndReturnCredentials(result.getCryptoObject().getCipher());
+    }
+
+    private boolean isAsymmetricSecureData(String server) {
+        if (server == null) {
+            return false;
+        }
+        SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+        return AsymmetricSecureDataHelper.isAsymmetricFormat(prefs, server);
+    }
+
+    private BiometricPrompt.CryptoObject createAsymmetricDecryptCryptoObject() {
+        try {
+            String server = getIntent().getStringExtra("server");
+            return AsymmetricSecureDataHelper.createDecryptCryptoObject(this, server);
+        } catch (KeyPermanentlyInvalidatedException e) {
+            cleanupInvalidatedAsymmetricData(getIntent().getStringExtra("server"));
+            finishActivity("error", 0, "Biometric enrollment changed");
+            return null;
+        } catch (GeneralSecurityException | IOException e) {
+            return null;
+        }
+    }
+
+    private void handleGetSecureDataAsymmetric(BiometricPrompt.AuthenticationResult result) {
+        try {
+            String server = getIntent().getStringExtra("server");
+            SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+            String encryptedData = prefs.getString("secure_" + server, null);
+            if (encryptedData == null) {
+                finishActivity("error", 21, "No protected data found");
+                return;
+            }
+            String value = AsymmetricSecureDataHelper.decryptPayload(result.getCryptoObject().getCipher(), encryptedData);
+            Intent intent = new Intent();
+            intent.putExtra("result", "success");
+            intent.putExtra("value", value);
+            setResult(RESULT_OK, intent);
+            finish();
+        } catch (KeyPermanentlyInvalidatedException e) {
+            cleanupInvalidatedAsymmetricData(getIntent().getStringExtra("server"));
+            finishActivity("error", 0, "Biometric enrollment changed");
+        } catch (Exception e) {
+            finishActivity("error", 0, "Failed to decrypt data: " + e.getMessage());
+        }
+    }
+
+    private void cleanupInvalidatedAsymmetricData(String server) {
+        if (server == null) {
+            return;
+        }
+        AsymmetricSecureDataHelper.deleteAsymmetricKey(this, server);
+        getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .remove("secure_" + server)
+            .remove(AsymmetricSecureDataHelper.secureFormatKey(server))
+            .apply();
     }
 
     private void encryptAndStoreCredentials(Cipher cipher) {
