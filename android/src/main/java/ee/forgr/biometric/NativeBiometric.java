@@ -620,26 +620,50 @@ public class NativeBiometric extends Plugin {
         String storageKey = dataStorageKey(key);
 
         if (accessControl != null && accessControl > 0) {
-            Intent intent = new Intent(getContext(), AuthActivity.class);
-            intent.putExtra("mode", "setSecureData");
-            intent.putExtra("server", storageKey);
-            intent.putExtra("value", value);
-            intent.putExtra("accessControl", accessControl);
-            intent.putExtra("authValidityDuration", authValidityDuration != null ? authValidityDuration : 0);
+            int validity = authValidityDuration != null ? authValidityDuration : 0;
+            if (validity > 0) {
+                Intent intent = new Intent(getContext(), AuthActivity.class);
+                intent.putExtra("mode", "setSecureData");
+                intent.putExtra("server", storageKey);
+                intent.putExtra("value", value);
+                intent.putExtra("accessControl", accessControl);
+                intent.putExtra("authValidityDuration", validity);
 
-            String title = call.getString("title", "Protect Data");
-            if (title == null || title.trim().isEmpty()) {
-                title = "Protect Data";
+                String title = call.getString("title", "Protect Data");
+                if (title == null || title.trim().isEmpty()) {
+                    title = "Protect Data";
+                }
+                intent.putExtra("title", title);
+
+                String negativeButtonText = call.getString("negativeButtonText", "Cancel");
+                if (negativeButtonText == null || negativeButtonText.trim().isEmpty()) {
+                    negativeButtonText = "Cancel";
+                }
+                intent.putExtra("negativeButtonText", negativeButtonText);
+
+                startActivityForResult(call, intent, "setSecureDataResult");
+            } else {
+                try {
+                    String encoded = AsymmetricSecureDataHelper.encryptAndEncode(
+                        getContext(),
+                        storageKey,
+                        value.getBytes(StandardCharsets.UTF_8),
+                        accessControl
+                    );
+                    SharedPreferences.Editor editor = getContext()
+                        .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE)
+                        .edit();
+                    editor.putString("secure_" + storageKey, encoded);
+                    editor.putInt(AsymmetricSecureDataHelper.secureFormatKey(storageKey), AsymmetricSecureDataHelper.FORMAT_ASYMMETRIC);
+                    editor.putInt("secure_" + storageKey + "_access_control", accessControl);
+                    editor.putInt("secure_" + storageKey + "_validity", 0);
+                    editor.apply();
+                    AsymmetricSecureDataHelper.deleteSymmetricLegacyKey(getContext(), storageKey);
+                    call.resolve();
+                } catch (GeneralSecurityException | IOException e) {
+                    call.reject("Failed to save data", e);
+                }
             }
-            intent.putExtra("title", title);
-
-            String negativeButtonText = call.getString("negativeButtonText", "Cancel");
-            if (negativeButtonText == null || negativeButtonText.trim().isEmpty()) {
-                negativeButtonText = "Cancel";
-            }
-            intent.putExtra("negativeButtonText", negativeButtonText);
-
-            startActivityForResult(call, intent, "setSecureDataResult");
         } else {
             try {
                 SharedPreferences.Editor editor = getContext()
@@ -732,6 +756,7 @@ public class NativeBiometric extends Plugin {
             editor.remove("secure_" + storageKey + "_validity");
             editor.remove("secure_" + storageKey + "_auth_scheme");
             editor.remove("secure_" + storageKey + "_access_control");
+            editor.remove(AsymmetricSecureDataHelper.secureFormatKey(storageKey));
             editor.apply();
 
             try {
@@ -739,6 +764,7 @@ public class NativeBiometric extends Plugin {
             } catch (KeyStoreException e) {
                 // Ignore — may not exist
             }
+            AsymmetricSecureDataHelper.deleteAsymmetricKey(getContext(), storageKey);
 
             call.resolve();
         } catch (KeyStoreException | CertificateException | NoSuchAlgorithmException | IOException e) {
