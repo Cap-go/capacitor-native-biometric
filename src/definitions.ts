@@ -239,8 +239,8 @@ export interface SetCredentialOptions {
 export interface GetSecureCredentialsOptions {
   server: string;
   /**
-   * Reason for requesting biometric authentication.
-   * Displayed in the biometric prompt on both iOS and Android.
+   * Title of the Touch ID prompt. Face ID does not display it.
+   * Only for iOS.
    */
   reason?: string;
   /**
@@ -331,8 +331,8 @@ export interface GetDataOptions {
 export interface GetSecureDataOptions {
   key: string;
   /**
-   * Reason for requesting biometric authentication.
-   * Displayed in the biometric prompt on both iOS and Android.
+   * Title of the Touch ID prompt. Face ID does not display it.
+   * Only for iOS.
    */
   reason?: string;
   /**
