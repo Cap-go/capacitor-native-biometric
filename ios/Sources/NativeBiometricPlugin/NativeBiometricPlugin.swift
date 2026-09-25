@@ -376,6 +376,9 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
         if let reason = call.getString("reason") {
             context.localizedReason = reason
         }
+        if let fallbackTitle = call.getString("fallbackTitle") {
+            context.localizedFallbackTitle = fallbackTitle
+        }
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
