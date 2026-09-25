@@ -687,14 +687,14 @@ Result from isAvailable() method indicating biometric authentication availabilit
 
 #### GetSecureCredentialsOptions
 
-| Prop                     | Type                | Description                                                                                                |
-| ------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **`server`**             | <code>string</code> |                                                                                                            |
-| **`reason`**             | <code>string</code> | Reason for requesting biometric authentication. Displayed in the biometric prompt on both iOS and Android. |
-| **`title`**              | <code>string</code> | Title for the biometric prompt. Only for Android.                                                          |
-| **`subtitle`**           | <code>string</code> | Subtitle for the biometric prompt. Only for Android.                                                       |
-| **`description`**        | <code>string</code> | Description for the biometric prompt. Only for Android.                                                    |
-| **`negativeButtonText`** | <code>string</code> | Text for the negative/cancel button. Only for Android.                                                     |
+| Prop                     | Type                | Description                                                              |
+| ------------------------ | ------------------- | ------------------------------------------------------------------------ |
+| **`server`**             | <code>string</code> |                                                                          |
+| **`reason`**             | <code>string</code> | Title of the Touch ID prompt. Face ID does not display it. Only for iOS. |
+| **`title`**              | <code>string</code> | Title for the biometric prompt. Only for Android.                        |
+| **`subtitle`**           | <code>string</code> | Subtitle for the biometric prompt. Only for Android.                     |
+| **`description`**        | <code>string</code> | Description for the biometric prompt. Only for Android.                  |
+| **`negativeButtonText`** | <code>string</code> | Text for the negative/cancel button. Only for Android.                   |
 
 
 #### IsCredentialsSavedResult
@@ -739,14 +739,14 @@ Result from isAvailable() method indicating biometric authentication availabilit
 
 #### GetSecureDataOptions
 
-| Prop                     | Type                | Description                                                                                                |
-| ------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **`key`**                | <code>string</code> |                                                                                                            |
-| **`reason`**             | <code>string</code> | Reason for requesting biometric authentication. Displayed in the biometric prompt on both iOS and Android. |
-| **`title`**              | <code>string</code> | Title for the biometric prompt. Only for Android.                                                          |
-| **`subtitle`**           | <code>string</code> | Subtitle for the biometric prompt. Only for Android.                                                       |
-| **`description`**        | <code>string</code> | Description for the biometric prompt. Only for Android.                                                    |
-| **`negativeButtonText`** | <code>string</code> | Text for the negative/cancel button. Only for Android.                                                     |
+| Prop                     | Type                | Description                                                              |
+| ------------------------ | ------------------- | ------------------------------------------------------------------------ |
+| **`key`**                | <code>string</code> |                                                                          |
+| **`reason`**             | <code>string</code> | Title of the Touch ID prompt. Face ID does not display it. Only for iOS. |
+| **`title`**              | <code>string</code> | Title for the biometric prompt. Only for Android.                        |
+| **`subtitle`**           | <code>string</code> | Subtitle for the biometric prompt. Only for Android.                     |
+| **`description`**        | <code>string</code> | Description for the biometric prompt. Only for Android.                  |
+| **`negativeButtonText`** | <code>string</code> | Text for the negative/cancel button. Only for Android.                   |
 
 
 #### DeleteDataOptions
