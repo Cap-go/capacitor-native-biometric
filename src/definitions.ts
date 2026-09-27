@@ -355,6 +355,13 @@ export interface GetSecureDataOptions {
    * Only for Android.
    */
   negativeButtonText?: string;
+  /**
+   * Set the text for the fallback button in the authentication dialog.
+   * If this property is not specified, the default text is set by the system.
+   * Set it to an empty string to hide the button.
+   * Only for iOS.
+   */
+  fallbackTitle?: string;
 }
 
 export interface StoredData {
