@@ -1,6 +1,6 @@
 import XCTest
 import Capacitor
-@testable import CapgoNativeBiometricPlugin
+@testable import NativeBiometricPlugin
 
 class CapgoNativeBiometricPluginTests: XCTestCase {
 
