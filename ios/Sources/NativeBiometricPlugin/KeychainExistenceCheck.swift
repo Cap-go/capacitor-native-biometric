@@ -44,10 +44,12 @@ enum KeychainExistenceCheck {
         )
 
         var item: CFTypeRef?
-        let status = SecItemCopyMatching(
-            query as CFDictionary,
-            returnAttributes ? &item : nil
-        )
+        let status: OSStatus
+        if returnAttributes {
+            status = SecItemCopyMatching(query as CFDictionary, &item)
+        } else {
+            status = SecItemCopyMatching(query as CFDictionary, nil)
+        }
         return indicatesItemExists(status: status)
     }
 }
