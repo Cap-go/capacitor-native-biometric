@@ -35,7 +35,7 @@
   "homepage": "https://capgo.app/docs/plugins/native-biometric/",
   "scripts": {
     "verify": "bun run check:is-available && bun run verify:ios && bun run verify:android && bun run verify:web",
-    "verify:ios": "xcodebuild -scheme CapgoCapacitorNativeBiometric -destination generic/platform=iOS",
+    "verify:ios": "xcodebuild -scheme CapgoCapacitorNativeBiometric -destination generic/platform=iOS && bash scripts/run-ios-unit-tests.sh",
     "verify:android": "cd android && ./gradlew clean build test && cd ..",
     "verify:web": "bun run build",
     "lint": "bun run eslint && bun run prettier -- --check && bun run swiftlint -- lint",
