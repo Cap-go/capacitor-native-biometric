@@ -21,7 +21,7 @@ Add Face ID, Touch ID and fingerprint login to your Capacitor app, and keep cred
 - **Authenticate**: `verifyIdentity()` shows the native biometric prompt.
 - **Credentials**: `setCredentials()`, `getCredentials()`, `getSecureCredentials()` and `deleteCredentials()` per server.
 - **Secure data**: `setData()`, `getData()` and `getSecureData()` store any string value.
-- **Change events**: the `biometryChange` listener fires when biometric enrollment changes.
+- **Change events**: the `biometryChange` listener runs when the app resumes, so you can detect enrollment changes made while it was in the background.
 - **Platforms**: iOS, Android and Web. Web provides mocks for development.
 
 ## Why Native Biometric?
