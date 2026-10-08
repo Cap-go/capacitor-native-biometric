@@ -161,7 +161,7 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
                         return
                     }
 
-                    var pluginErrorCode = self.convertToPluginErrorCode(error._code)
+                    let pluginErrorCode = self.convertToPluginErrorCode(error._code)
                     // use pluginErrorCode.description to convert Int to String
                     call.reject(error.localizedDescription, pluginErrorCode.description, error )
                 }
