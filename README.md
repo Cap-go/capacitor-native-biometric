@@ -754,15 +754,16 @@ Result from isAvailable() method indicating biometric authentication availabilit
 
 #### GetSecureDataOptions
 
-| Prop                     | Type                | Description                                                                                                                                                                                              |
-| ------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`key`**                | <code>string</code> |                                                                                                                                                                                                          |
-| **`reason`**             | <code>string</code> | Reason for requesting biometric authentication. Displayed in the biometric prompt on both iOS and Android.                                                                                               |
-| **`title`**              | <code>string</code> | Title for the biometric prompt. Only for Android.                                                                                                                                                        |
-| **`subtitle`**           | <code>string</code> | Subtitle for the biometric prompt. Only for Android.                                                                                                                                                     |
-| **`description`**        | <code>string</code> | Description for the biometric prompt. Only for Android.                                                                                                                                                  |
-| **`negativeButtonText`** | <code>string</code> | Text for the negative/cancel button. Only for Android.                                                                                                                                                   |
-| **`fallbackTitle`**      | <code>string</code> | Set the text for the fallback button in the authentication dialog. If this property is not specified, the default text is set by the system. Set it to an empty string to hide the button. Only for iOS. |
+| Prop                     | Type                | Description                                                                                                                                                                                              | Default        |
+| ------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **`key`**                | <code>string</code> |                                                                                                                                                                                                          |                |
+| **`reason`**             | <code>string</code> | Reason for requesting biometric authentication. Displayed in the biometric prompt on both iOS and Android.                                                                                               |                |
+| **`title`**              | <code>string</code> | Title for the biometric prompt. Only for Android.                                                                                                                                                        |                |
+| **`subtitle`**           | <code>string</code> | Subtitle for the biometric prompt. Only for Android.                                                                                                                                                     |                |
+| **`description`**        | <code>string</code> | Description for the biometric prompt. Only for Android.                                                                                                                                                  |                |
+| **`negativeButtonText`** | <code>string</code> | Text for the negative/cancel button. Only for Android.                                                                                                                                                   |                |
+| **`fallbackTitle`**      | <code>string</code> | Set the text for the fallback button in the authentication dialog. If this property is not specified, the default text is set by the system. Set it to an empty string to hide the button. Only for iOS. |                |
+| **`maxAttempts`**        | <code>number</code> | Set a maximum number of attempts for biometric authentication. The maximum allowed by Android is 5. Only for Android.                                                                                    | <code>1</code> |
 
 
 #### DeleteDataOptions

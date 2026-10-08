@@ -731,6 +731,8 @@ public class NativeBiometric extends Plugin {
         if (description != null) intent.putExtra("description", description);
         String negativeText = call.getString("negativeButtonText");
         if (negativeText != null) intent.putExtra("negativeButtonText", negativeText);
+        Integer maxAttempts = call.getInt("maxAttempts");
+        if (maxAttempts != null) intent.putExtra("maxAttempts", maxAttempts);
 
         startActivityForResult(call, intent, "getSecureDataResult");
     }
