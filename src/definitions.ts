@@ -362,6 +362,12 @@ export interface GetSecureDataOptions {
    * Only for iOS.
    */
   fallbackTitle?: string;
+  /**
+   * Set a maximum number of attempts for biometric authentication. The maximum allowed by Android is 5.
+   * Only for Android.
+   * @default 1
+   */
+  maxAttempts?: number;
 }
 
 export interface StoredData {

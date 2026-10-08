@@ -1,13 +1,28 @@
 # Capacitor Native Biometric 
-<a href="https://capgo.app/"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-native-biometric" alt="Capgo - Instant updates for Capacitor" /></a>
- 
+
+Add Face ID, Touch ID and fingerprint login to your Capacitor app, and keep credentials safe in the iOS Keychain and Android Keystore.
+
+<a href="https://capgo.app/?ref=plugin_native_biometric"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-native-biometric" alt="Capgo - Instant updates for Capacitor" /></a>
+
 <div align="center">
-  <h2><a href="https://capgo.app/?ref=plugin_native_biometric"> ➡️ Get Instant updates for your App with Capgo</a></h2>
-  <h2><a href="https://capgo.app/consulting/?ref=plugin_native_biometric"> Missing a feature? We’ll build the plugin for you 💪</a></h2>
+  <p><b>Capgo</b>: push fixes to your Capacitor users in minutes, build signed iOS and Android apps without a Mac, and roll back in one click.</p>
+  <h2><a href="https://capgo.app/register/?ref=plugin_native_biometric">➡️ Get started for free</a></h2>
+  <p>14-day unlimited free trial. No credit card required</p>
+  <p><a href="https://capgo.app/consulting/?ref=plugin_native_biometric">Missing a feature? We'll build the plugin for you 💪</a></p>
 </div>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-biometric/main/assets/github-social-preview.png" alt="@capgo/capacitor-native-biometric for Capacitor apps" width="300" />
+</p>
 
-Use biometrics confirm device owner presence or authenticate users. A couple of methods are provided to handle user credentials. These are securely stored using Keychain (iOS) and Keystore (Android).
+## Key features
+
+- **Biometric check**: `isAvailable()` returns the biometry type, with optional device credential fallback.
+- **Authenticate**: `verifyIdentity()` shows the native biometric prompt.
+- **Credentials**: `setCredentials()`, `getCredentials()`, `getSecureCredentials()` and `deleteCredentials()` per server.
+- **Secure data**: `setData()`, `getData()` and `getSecureData()` store any string value.
+- **Change events**: the `biometryChange` listener runs when the app resumes, so you can detect enrollment changes made while it was in the background.
+- **Platforms**: iOS, Android and Web. Web provides mocks for development.
 
 ## Why Native Biometric?
 
@@ -290,7 +305,7 @@ This is a plugin specific list of error codes that can be thrown on `verifyIdent
 | 17   | User Fallback                    | Android, iOS                 |
 | 21   | No Protected Credentials/Data Found | Android, iOS                 |
 
-**Code 21 (`getSecureCredentials`, `getSecureData`)** — Stable, expected rejection when no biometric-protected credentials or data exist (for example after deletion, a fresh install, or items invalidated by biometric enrollment changes). Platform messages differ slightly:
+**Code 21 (`getSecureCredentials`, `getSecureData`)**, Stable, expected rejection when no biometric-protected credentials or data exist (for example after deletion, a fresh install, or items invalidated by biometric enrollment changes). Platform messages differ slightly:
 
 - **`getSecureCredentials()`**
   - **Android:** `No protected credentials found`
@@ -739,15 +754,16 @@ Result from isAvailable() method indicating biometric authentication availabilit
 
 #### GetSecureDataOptions
 
-| Prop                     | Type                | Description                                                                                                                                                                                              |
-| ------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`key`**                | <code>string</code> |                                                                                                                                                                                                          |
-| **`reason`**             | <code>string</code> | Explanation text shown as the subtitle of the Touch ID prompt. Face ID does not display it. Only for iOS.                                                                                                |
-| **`title`**              | <code>string</code> | Title for the biometric prompt. Only for Android.                                                                                                                                                        |
-| **`subtitle`**           | <code>string</code> | Subtitle for the biometric prompt. Only for Android.                                                                                                                                                     |
-| **`description`**        | <code>string</code> | Description for the biometric prompt. Only for Android.                                                                                                                                                  |
-| **`negativeButtonText`** | <code>string</code> | Text for the negative/cancel button. Only for Android.                                                                                                                                                   |
-| **`fallbackTitle`**      | <code>string</code> | Set the text for the fallback button in the authentication dialog. If this property is not specified, the default text is set by the system. Set it to an empty string to hide the button. Only for iOS. |
+| Prop                     | Type                | Description                                                                                                                                                                                              | Default        |
+| ------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **`key`**                | <code>string</code> |                                                                                                                                                                                                          |                |
+| **`reason`**             | <code>string</code> | Explanation text shown as the subtitle of the Touch ID prompt. Face ID does not display it. Only for iOS.                                                                                                |                |
+| **`title`**              | <code>string</code> | Title for the biometric prompt. Only for Android.                                                                                                                                                        |                |
+| **`subtitle`**           | <code>string</code> | Subtitle for the biometric prompt. Only for Android.                                                                                                                                                     |                |
+| **`description`**        | <code>string</code> | Description for the biometric prompt. Only for Android.                                                                                                                                                  |                |
+| **`negativeButtonText`** | <code>string</code> | Text for the negative/cancel button. Only for Android.                                                                                                                                                   |                |
+| **`fallbackTitle`**      | <code>string</code> | Set the text for the fallback button in the authentication dialog. If this property is not specified, the default text is set by the system. Set it to an empty string to hide the button. Only for iOS. |                |
+| **`maxAttempts`**        | <code>number</code> | Set a maximum number of attempts for biometric authentication. The maximum allowed by Android is 5. Only for Android.                                                                                    | <code>1</code> |
 
 
 #### DeleteDataOptions

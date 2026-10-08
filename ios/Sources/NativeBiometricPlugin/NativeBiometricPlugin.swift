@@ -11,7 +11,7 @@ import LocalAuthentication
 
 @objc(NativeBiometricPlugin)
 public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
-    private let pluginVersion: String = "8.7.0"
+    private let pluginVersion: String = "8.7.2"
     public let identifier = "NativeBiometricPlugin"
     public let jsName = "NativeBiometric"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -161,7 +161,7 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
                         return
                     }
 
-                    var pluginErrorCode = self.convertToPluginErrorCode(error._code)
+                    let pluginErrorCode = self.convertToPluginErrorCode(error._code)
                     // use pluginErrorCode.description to convert Int to String
                     call.reject(error.localizedDescription, pluginErrorCode.description, error )
                 }
@@ -578,17 +578,11 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     func checkProtectedDataExist(_ key: String) -> Bool {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: secureDataService,
-            kSecAttrAccount as String: dataAccount(key),
-            kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecReturnAttributes as String: true
-        ]
-
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        return status == errSecSuccess
+        return KeychainExistenceCheck.protectedItemExists(
+            service: secureDataService,
+            account: dataAccount(key),
+            returnAttributes: true
+        )
     }
 
     @objc func isCredentialsSaved(_ call: CAPPluginCall) {
@@ -612,12 +606,7 @@ public class NativeBiometricPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     func checkProtectedCredentialsExist(_ server: String) -> Bool {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                    kSecAttrService as String: server,
-                                    kSecMatchLimit as String: kSecMatchLimitOne]
-
-        let status = SecItemCopyMatching(query as CFDictionary, nil)
-        return status == errSecSuccess
+        return KeychainExistenceCheck.protectedItemExists(service: server)
     }
 
     func storeProtectedCredentials(_ credentials: Credentials, _ server: String, _ accessControl: Int) throws {
