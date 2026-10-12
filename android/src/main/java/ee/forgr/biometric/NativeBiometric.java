@@ -7,7 +7,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.hardware.fingerprint.FingerprintManager;
 import android.os.Build;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
@@ -322,11 +321,27 @@ public class NativeBiometric extends Plugin {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return false;
         }
+        return hasEnrolledFingerprintsReflectively(getContext());
+    }
 
+    /**
+     * Fingerprint enrollment is not exposed through {@link BiometricManager} per modality. On
+     * compileSdk 37+ {@code android.hardware.fingerprint.FingerprintManager} is hidden from the
+     * public SDK, so access it reflectively when the class is still present at runtime.
+     */
+    static boolean hasEnrolledFingerprintsReflectively(Context context) {
+        if (context == null) {
+            return false;
+        }
         try {
-            FingerprintManager fingerprintManager = getContext().getSystemService(FingerprintManager.class);
-            return fingerprintManager != null && fingerprintManager.hasEnrolledFingerprints();
-        } catch (SecurityException ignored) {
+            Class<?> fingerprintManagerClass = Class.forName("android.hardware.fingerprint.FingerprintManager");
+            Object fingerprintManager = context.getSystemService(fingerprintManagerClass);
+            if (fingerprintManager == null) {
+                return false;
+            }
+            Object enrolled = fingerprintManagerClass.getMethod("hasEnrolledFingerprints").invoke(fingerprintManager);
+            return Boolean.TRUE.equals(enrolled);
+        } catch (ReflectiveOperationException | SecurityException | LinkageError ignored) {
             return false;
         }
     }
