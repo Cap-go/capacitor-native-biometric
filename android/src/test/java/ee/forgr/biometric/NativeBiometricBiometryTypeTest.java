@@ -1,6 +1,7 @@
 package ee.forgr.biometric;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import org.junit.Test;
 
@@ -100,5 +101,11 @@ public class NativeBiometricBiometryTypeTest {
     @Test
     public void noBiometricHardware_withoutCredentials_returnsNone() {
         assertEquals(NONE, NativeBiometric.resolveBiometryType(false, false, false, false, false, false, PREFER_FINGERPRINT));
+    }
+
+    /** JVM unit tests have no FingerprintManager; reflection path must fail closed. */
+    @Test
+    public void hasEnrolledFingerprintsReflectively_nullContext_returnsFalse() {
+        assertFalse(NativeBiometric.hasEnrolledFingerprintsReflectively(null));
     }
 }
