@@ -367,10 +367,7 @@ public class NativeBiometric extends Plugin {
             intent.putExtra("negativeButtonText", negativeButtonText);
         }
 
-        Integer maxAttempts = call.getInt("maxAttempts");
-        if (maxAttempts != null) {
-            intent.putExtra("maxAttempts", maxAttempts);
-        }
+        MaxAttemptsIntentExtra.putFromPluginCall(call, intent);
 
         // Pass allowed biometry types
         JSArray allowedTypes = call.getArray("allowedBiometryTypes");
@@ -423,6 +420,7 @@ public class NativeBiometric extends Plugin {
                 negativeButtonText = "Cancel";
             }
             intent.putExtra("negativeButtonText", negativeButtonText);
+            MaxAttemptsIntentExtra.putFromPluginCall(call, intent);
 
             startActivityForResult(call, intent, "setSecureCredentialsResult");
         } else {
@@ -466,6 +464,7 @@ public class NativeBiometric extends Plugin {
         if (description != null) intent.putExtra("description", description);
         String negativeText = call.getString("negativeButtonText");
         if (negativeText != null) intent.putExtra("negativeButtonText", negativeText);
+        MaxAttemptsIntentExtra.putFromPluginCall(call, intent);
 
         startActivityForResult(call, intent, "getSecureCredentialsResult");
     }
@@ -655,6 +654,7 @@ public class NativeBiometric extends Plugin {
                     negativeButtonText = "Cancel";
                 }
                 intent.putExtra("negativeButtonText", negativeButtonText);
+                MaxAttemptsIntentExtra.putFromPluginCall(call, intent);
 
                 startActivityForResult(call, intent, "setSecureDataResult");
             } else {
@@ -746,8 +746,7 @@ public class NativeBiometric extends Plugin {
         if (description != null) intent.putExtra("description", description);
         String negativeText = call.getString("negativeButtonText");
         if (negativeText != null) intent.putExtra("negativeButtonText", negativeText);
-        Integer maxAttempts = call.getInt("maxAttempts");
-        if (maxAttempts != null) intent.putExtra("maxAttempts", maxAttempts);
+        MaxAttemptsIntentExtra.putFromPluginCall(call, intent);
 
         startActivityForResult(call, intent, "getSecureDataResult");
     }
