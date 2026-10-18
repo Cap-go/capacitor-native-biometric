@@ -234,6 +234,12 @@ export interface SetCredentialOptions {
    * @since 8.4.14
    */
   negativeButtonText?: string;
+  /**
+   * Set a maximum number of attempts for biometric authentication. The maximum allowed by Android is 5.
+   * Only for Android.
+   * @default 1
+   */
+  maxAttempts?: number;
 }
 
 export interface GetSecureCredentialsOptions {
@@ -263,6 +269,12 @@ export interface GetSecureCredentialsOptions {
    * Only for Android.
    */
   negativeButtonText?: string;
+  /**
+   * Set a maximum number of attempts for biometric authentication. The maximum allowed by Android is 5.
+   * Only for Android.
+   * @default 1
+   */
+  maxAttempts?: number;
 }
 
 export interface DeleteCredentialOptions {
@@ -322,6 +334,12 @@ export interface SetDataOptions {
    * @since 8.6.0
    */
   negativeButtonText?: string;
+  /**
+   * Set a maximum number of attempts for biometric authentication. The maximum allowed by Android is 5.
+   * Only for Android.
+   * @default 1
+   */
+  maxAttempts?: number;
 }
 
 export interface GetDataOptions {
