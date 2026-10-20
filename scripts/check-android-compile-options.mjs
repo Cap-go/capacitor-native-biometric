@@ -5,6 +5,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { validateCompileOptionsJava21 } from "./strip-gradle-comments.mjs";
 
 const pluginDir = process.argv.includes("--dir")
   ? process.argv[process.argv.indexOf("--dir") + 1]
@@ -12,23 +13,10 @@ const pluginDir = process.argv.includes("--dir")
 
 const gradlePath = path.join(pluginDir, "android", "build.gradle");
 const content = fs.readFileSync(gradlePath, "utf8");
+const result = validateCompileOptionsJava21(content);
 
-const blockMatch = content.match(/compileOptions\s*\{[\s\S]*?\}/);
-if (!blockMatch) {
-  console.error(
-    `${gradlePath}: missing compileOptions block (expected Java 21 source/target).`,
-  );
-  process.exit(1);
-}
-
-const block = blockMatch[0];
-const hasSource = /sourceCompatibility\s+JavaVersion\.VERSION_21/.test(block);
-const hasTarget = /targetCompatibility\s+JavaVersion\.VERSION_21/.test(block);
-
-if (!hasSource || !hasTarget) {
-  console.error(
-    `${gradlePath}: compileOptions must set sourceCompatibility and targetCompatibility to JavaVersion.VERSION_21.`,
-  );
+if (!result.ok) {
+  console.error(`${gradlePath}: ${result.reason}.`);
   process.exit(1);
 }
 
