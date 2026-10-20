@@ -96,10 +96,34 @@ function readQuoted(input, start, quote) {
   return { text, end: i };
 }
 
+function maskQuotedStrings(input) {
+  let out = "";
+  let i = 0;
+
+  while (i < input.length) {
+    if (input[i] === '"' || input[i] === "'") {
+      const chunk = readQuoted(input, i, input[i]);
+      out += chunk.text.replace(/[^\n]/g, " ");
+      i = chunk.end;
+      continue;
+    }
+    out += input[i];
+    i++;
+  }
+
+  return out;
+}
+
 export function findCompileOptionsBlock(content) {
   const stripped = stripGradleComments(content);
-  const match = stripped.match(/compileOptions\s*\{[\s\S]*?\}/);
-  return match ? match[0] : null;
+  const searchable = maskQuotedStrings(stripped);
+  const match = searchable.match(/compileOptions\s*\{[\s\S]*?\}/);
+  if (!match) {
+    return null;
+  }
+  const blockStart = match.index ?? 0;
+  const blockEnd = blockStart + match[0].length;
+  return stripped.slice(blockStart, blockEnd);
 }
 
 export function validateCompileOptionsJava21(content) {
@@ -107,8 +131,12 @@ export function validateCompileOptionsJava21(content) {
   if (!block) {
     return { ok: false, reason: "missing compileOptions block" };
   }
-  const hasSource = /sourceCompatibility\s+JavaVersion\.VERSION_21/.test(block);
-  const hasTarget = /targetCompatibility\s+JavaVersion\.VERSION_21/.test(block);
+  const hasSource = /sourceCompatibility\s*=?\s+JavaVersion\.VERSION_21/.test(
+    block,
+  );
+  const hasTarget = /targetCompatibility\s*=?\s+JavaVersion\.VERSION_21/.test(
+    block,
+  );
   if (!hasSource || !hasTarget) {
     return {
       ok: false,
