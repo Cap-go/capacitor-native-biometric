@@ -64,6 +64,17 @@ android {
   assert.equal(validateCompileOptionsJava21(content).ok, false);
 });
 
+test("quoted note mentioning compatibility inside compileOptions does not pass", () => {
+  const content = `
+android {
+    compileOptions {
+        def note = "sourceCompatibility JavaVersion.VERSION_21 targetCompatibility JavaVersion.VERSION_21"
+    }
+}
+`;
+  assert.equal(validateCompileOptionsJava21(content).ok, false);
+});
+
 test("Groovy assignment syntax for compatibility is accepted", () => {
   const content = `
 android {

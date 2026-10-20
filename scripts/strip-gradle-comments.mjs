@@ -131,11 +131,12 @@ export function validateCompileOptionsJava21(content) {
   if (!block) {
     return { ok: false, reason: "missing compileOptions block" };
   }
+  const masked = maskQuotedStrings(block);
   const hasSource = /sourceCompatibility\s*=?\s+JavaVersion\.VERSION_21/.test(
-    block,
+    masked,
   );
   const hasTarget = /targetCompatibility\s*=?\s+JavaVersion\.VERSION_21/.test(
-    block,
+    masked,
   );
   if (!hasSource || !hasTarget) {
     return {
