@@ -40,6 +40,8 @@ jobs:
         run: bun i
       - name: Check plugin wiring
         run: bun run check:wiring
+      - name: Check Android Java compile options
+        run: bun run check:android-compile-options
       - name: Check Cap 9 deprecated APIs
         run: bun run check:cap9-deprecated
       - name: Setup java
