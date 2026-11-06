@@ -68,6 +68,16 @@ case "$platform" in
     bunx cap sync android
     cd android
     ./gradlew build test
+    ./gradlew :app:assembleRelease
+    mapping_file="$test_app/android/app/build/outputs/mapping/release/mapping.txt"
+    if [ ! -f "$mapping_file" ]; then
+      echo "Expected R8 mapping at $mapping_file"
+      exit 1
+    fi
+    if ! grep -Fq 'ee.forgr.biometric.NativeBiometric ->' "$mapping_file"; then
+      echo "NativeBiometric missing from R8 mapping; consumer rules may be wrong"
+      exit 1
+    fi
     ;;
   ios)
     ensure_platform ios
