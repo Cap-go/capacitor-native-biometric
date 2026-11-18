@@ -17,6 +17,8 @@ buildscript {
 
 apply plugin: 'com.android.library'
 
+def pluginVersion = new groovy.json.JsonSlurper().parse(file('../package.json')).version
+
 android {
     namespace = "ee.forgr.biometric.capacitornativebiometric"
     compileSdk = project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
@@ -25,8 +27,12 @@ android {
         targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
         versionCode 1
         versionName "1.0"
+        buildConfigField("String", "PLUGIN_VERSION", '"' + pluginVersion + '"')
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles 'consumer-rules.pro'
+    }
+    buildFeatures {
+        buildConfig = true
     }
     buildTypes {
         release {

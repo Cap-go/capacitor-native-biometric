@@ -4,11 +4,39 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import android.os.Build;
 import android.security.keystore.KeyProperties;
 import androidx.biometric.BiometricManager;
 import org.junit.Test;
 
 public class BiometricAuthenticatorConfigTest {
+
+    @Test
+    public void verificationFallbackAllowsStrongBiometricsAndDeviceCredentialOnAndroid11() {
+        BiometricAuthenticatorConfig config = BiometricAuthenticatorConfig.forVerification(null, true, Build.VERSION_CODES.R);
+
+        assertEquals(
+            BiometricManager.Authenticators.BIOMETRIC_STRONG | BiometricManager.Authenticators.DEVICE_CREDENTIAL,
+            config.promptAuthenticators
+        );
+        assertFalse(config.allowNegativeButton);
+    }
+
+    @Test
+    public void verificationFallbackKeepsExplicitBiometryFilter() {
+        BiometricAuthenticatorConfig config = BiometricAuthenticatorConfig.forVerification(new int[] { 3 }, true, Build.VERSION_CODES.R);
+
+        assertEquals(BiometricManager.Authenticators.BIOMETRIC_STRONG, config.promptAuthenticators);
+        assertTrue(config.allowNegativeButton);
+    }
+
+    @Test
+    public void verificationFallbackKeepsNegativeButtonOnAndroid10() {
+        BiometricAuthenticatorConfig config = BiometricAuthenticatorConfig.forVerification(null, true, Build.VERSION_CODES.Q);
+
+        assertEquals(BiometricAuthenticatorConfig.PROMPT_BIOMETRIC_ANY, config.promptAuthenticators);
+        assertTrue(config.allowNegativeButton);
+    }
 
     @Test
     public void nullAllowedTypes_defaultsToAnyBiometric() {

@@ -51,6 +51,7 @@ public class AuthActivity extends AppCompatActivity {
     private String mode;
     private int maxAttempts;
     private int counter = 0;
+    private boolean resultDelivered;
     private int authValidityDuration;
     private BiometricAuthenticatorConfig authenticatorConfig;
     private static final String AUTH_KEY_AUTH_TYPES = "auth_key_auth_types";
@@ -130,7 +131,11 @@ public class AuthActivity extends AppCompatActivity {
                 BiometricAuthenticatorConfig.fromAllowedTypes(allowedTypes)
             );
         } else {
-            authenticatorConfig = BiometricAuthenticatorConfig.fromAllowedTypes(allowedTypes);
+            authenticatorConfig = BiometricAuthenticatorConfig.forVerification(
+                allowedTypes,
+                getIntent().getBooleanExtra("useFallback", false),
+                Build.VERSION.SDK_INT
+            );
         }
         builder.setAllowedAuthenticators(authenticatorConfig.promptAuthenticators);
 
@@ -191,9 +196,8 @@ public class AuthActivity extends AppCompatActivity {
                     super.onAuthenticationFailed();
                     counter++;
                     if (counter >= maxAttempts) {
-                        biometricPrompt.cancelAuthentication();
-                        // Use error code 4 for too many attempts to match iOS behavior
-                        finishActivity("error", 4, "Too many failed attempts");
+                        // Finishing dismisses the prompt without replacing the result with a cancellation callback.
+                        finishActivity("error", 10, "Too many failed attempts");
                     }
                 }
             }
@@ -236,6 +240,11 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     void finishActivity(String result, Integer errorCode, String errorDetails) {
+        if (resultDelivered) {
+            return;
+        }
+        resultDelivered = true;
+
         Intent intent = new Intent();
         intent.putExtra("result", result);
         if (errorCode != null) {
@@ -399,7 +408,7 @@ public class AuthActivity extends AppCompatActivity {
                     validityDurationSeconds
                 )
             ) {
-                recoverCredentialKeyFromLegacyScheme(server, ks);
+                removeCredentialKeyAndData(server, ks);
             } else if (getStoredAuthValidityDuration(server) != authValidityDuration) {
                 // If the caller asked for a different auth model than the one the existing key was
                 // generated with (per-operation vs. time-based validity window), the key must be
@@ -490,7 +499,7 @@ public class AuthActivity extends AppCompatActivity {
         }
     }
 
-    private void recoverCredentialKeyFromLegacyScheme(String server, KeyStore keyStore) throws GeneralSecurityException, IOException {
+    private void removeCredentialKeyAndData(String server, KeyStore keyStore) throws GeneralSecurityException, IOException {
         String alias = SECURE_KEY_PREFIX + server;
         if (keyStore.containsAlias(alias)) {
             keyStore.deleteEntry(alias);
@@ -577,7 +586,10 @@ public class AuthActivity extends AppCompatActivity {
             String server = getIntent().getStringExtra("server");
             SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
             String encryptedData = prefs.getString("secure_" + server, null);
-            if (encryptedData == null) return null;
+            if (encryptedData == null) {
+                finishActivity("error", 21, "No protected credentials found");
+                return null;
+            }
 
             byte[] combined = Base64.decode(encryptedData, Base64.DEFAULT);
             byte[] iv = new byte[CREDENTIAL_GCM_IV_LENGTH];
@@ -593,8 +605,8 @@ public class AuthActivity extends AppCompatActivity {
                 // re-enroll credentials via setSecureCredentials.
                 KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
                 ks.load(null);
-                ks.deleteEntry(SECURE_KEY_PREFIX + server);
-                prefs.edit().remove("secure_" + server).apply();
+                removeCredentialKeyAndData(server, ks);
+                finishActivity("error", 21, "No protected credentials found");
                 return null;
             }
             return new BiometricPrompt.CryptoObject(cipher);
@@ -837,8 +849,7 @@ public class AuthActivity extends AppCompatActivity {
             // and encrypted data so the user can re-enroll via setSecureCredentials.
             KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
             ks.load(null);
-            ks.deleteEntry(SECURE_KEY_PREFIX + server);
-            prefs.edit().remove("secure_" + server).apply();
+            removeCredentialKeyAndData(server, ks);
             return null;
         }
         return cipher;

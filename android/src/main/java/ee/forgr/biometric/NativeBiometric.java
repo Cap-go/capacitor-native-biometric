@@ -23,6 +23,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import ee.forgr.biometric.capacitornativebiometric.BuildConfig;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -53,8 +54,6 @@ import org.json.JSONException;
 
 @CapacitorPlugin(name = "NativeBiometric")
 public class NativeBiometric extends Plugin {
-
-    private final String pluginVersion = "7.5.4";
 
     //protected final static int AUTH_CODE = 0102;
 
@@ -379,10 +378,8 @@ public class NativeBiometric extends Plugin {
             intent.putExtra("allowedBiometryTypes", types);
         }
 
-        // Note: useFallback parameter is ignored on Android (iOS-only feature)
-        // Android's BiometricPrompt doesn't support fallback to device credentials when a negative button is present.
-        // The API constraint: setNegativeButtonText() and DEVICE_CREDENTIAL authenticator are mutually exclusive.
-        // Since we need the negative button for user cancellation, fallback cannot be supported on Android.
+        boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));
+        intent.putExtra("useFallback", useFallback && deviceHasCredentials());
 
         startActivityForResult(call, intent, "verifyResult");
     }
@@ -1082,7 +1079,7 @@ public class NativeBiometric extends Plugin {
     public void getPluginVersion(final PluginCall call) {
         try {
             final JSObject ret = new JSObject();
-            ret.put("version", this.pluginVersion);
+            ret.put("version", BuildConfig.PLUGIN_VERSION);
             call.resolve(ret);
         } catch (final Exception e) {
             call.reject("Could not get plugin version", e);

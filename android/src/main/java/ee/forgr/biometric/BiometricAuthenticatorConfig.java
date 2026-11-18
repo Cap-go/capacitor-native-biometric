@@ -102,6 +102,13 @@ public final class BiometricAuthenticatorConfig {
         return new BiometricAuthenticatorConfig(promptAuth, keyAuth > 0 ? keyAuth : keyAuthAny(), allowNegative, !deviceCredentialOnly);
     }
 
+    static BiometricAuthenticatorConfig forVerification(int[] allowedTypes, boolean useFallback, int sdkInt) {
+        if (useFallback && sdkInt >= Build.VERSION_CODES.R && (allowedTypes == null || allowedTypes.length == 0)) {
+            return fromAllowedTypes(new int[] { FINGERPRINT, DEVICE_CREDENTIAL });
+        }
+        return fromAllowedTypes(allowedTypes);
+    }
+
     private static BiometricAuthenticatorConfig defaultBiometric() {
         return new BiometricAuthenticatorConfig(PROMPT_BIOMETRIC_ANY, keyAuthAny(), true, true);
     }

@@ -67,12 +67,8 @@ export interface IsAvailableOptions {
    * when no biometric is enrolled or available.
    *
    * - On iOS, this affects both `isAvailable()` and `verifyIdentity()`.
-   * - On Android, this is honored by `isAvailable()` only — the native check computes
-   *   `fallbackAvailable = useFallback && deviceIsSecure` and reports availability
-   *   accordingly. The `verifyIdentity()` flow ignores this option on Android due to
-   *   BiometricPrompt API constraints (DEVICE_CREDENTIAL authenticator and negative
-   *   button are mutually exclusive); use `BiometricOptions.useFallback` (iOS-only) to
-   *   control the auth-dialog fallback there.
+   * - On Android, `isAvailable()` counts the device credential when the lock screen is secure.
+   *   Pass `BiometricOptions.useFallback` to configure the verification prompt separately.
    */
   useFallback: boolean;
   /**
@@ -145,10 +141,10 @@ export interface BiometricOptions {
   description?: string;
   negativeButtonText?: string;
   /**
-   * Only for iOS.
-   * Specifies if should fallback to passcode authentication if biometric authentication fails.
-   * On Android, this parameter is ignored due to BiometricPrompt API constraints:
-   * DEVICE_CREDENTIAL authenticator and negative button (cancel) are mutually exclusive.
+   * Allows the device passcode as an alternative in `verifyIdentity()`.
+   * On Android 11 or newer, this adds PIN, pattern, or password alongside strong biometrics
+   * when a secure lock screen is configured. An explicit `allowedBiometryTypes` list takes priority.
+   * Android hides the negative button when the prompt allows the device credential.
    */
   useFallback?: boolean;
   /**
