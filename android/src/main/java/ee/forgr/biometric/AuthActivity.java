@@ -41,10 +41,6 @@ public class AuthActivity extends AppCompatActivity {
     private static final String AUTH_TRANSFORMATION = "AES/GCM/NoPadding";
     private static final String SECURE_KEY_PREFIX = "NativeBiometricSecure_";
     private static final int CREDENTIAL_GCM_IV_LENGTH = 12;
-    private static final String SHARED_PREFS_NAME = "NativeBiometricSharedPreferences";
-    private static final String SECURE_VALIDITY_SUFFIX = "_validity";
-    private static final String SECURE_AUTH_SCHEME_SUFFIX = "_auth_scheme";
-    private static final String SECURE_ACCESS_CONTROL_SUFFIX = "_access_control";
 
     private BiometricPrompt biometricPrompt;
     private Cipher authCipher;
@@ -288,7 +284,7 @@ public class AuthActivity extends AppCompatActivity {
         } catch (CertificateException e) {
             throw new GeneralSecurityException("Failed to load AndroidKeyStore", e);
         }
-        SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+        SharedPreferences prefs = SecureCredentialPreferences.open(this);
         int storedScheme = prefs.getInt(AUTH_KEY_AUTH_TYPES_SCHEME, 0);
         if (keyStore.containsAlias(AUTH_KEY_ALIAS) && shouldRegenerateAuthKey(storedScheme)) {
             keyStore.deleteEntry(AUTH_KEY_ALIAS);
@@ -417,7 +413,7 @@ public class AuthActivity extends AppCompatActivity {
                 ks.deleteEntry(alias);
             } else if (accessControl > 0 && getStoredAccessControl(server) != accessControl) {
                 ks.deleteEntry(alias);
-                getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit().remove("secure_" + server).apply();
+                SecureCredentialPreferences.open(this).edit().remove("secure_" + server).apply();
             } else {
                 return (SecretKey) ks.getKey(alias, null);
             }
@@ -504,11 +500,9 @@ public class AuthActivity extends AppCompatActivity {
         if (keyStore.containsAlias(alias)) {
             keyStore.deleteEntry(alias);
         }
-        SharedPreferences.Editor editor = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit();
+        SharedPreferences.Editor editor = SecureCredentialPreferences.open(this).edit();
         editor.remove("secure_" + server);
-        editor.remove("secure_" + server + SECURE_VALIDITY_SUFFIX);
-        editor.remove("secure_" + server + SECURE_AUTH_SCHEME_SUFFIX);
-        editor.remove("secure_" + server + SECURE_ACCESS_CONTROL_SUFFIX);
+        SecureCredentialPreferences.removeMetadata(editor, server);
         editor.apply();
     }
 
@@ -548,13 +542,13 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     private int getStoredAuthValidityDuration(String server) {
-        SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
-        return prefs.getInt("secure_" + server + SECURE_VALIDITY_SUFFIX, 0);
+        SharedPreferences prefs = SecureCredentialPreferences.open(this);
+        return prefs.getInt(SecureCredentialPreferences.validityKey(server), 0);
     }
 
     private void storeAuthValidityDuration(String server, int authValidityDuration) {
-        SharedPreferences.Editor editor = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit();
-        editor.putInt("secure_" + server + SECURE_VALIDITY_SUFFIX, authValidityDuration);
+        SharedPreferences.Editor editor = SecureCredentialPreferences.open(this).edit();
+        editor.putInt(SecureCredentialPreferences.validityKey(server), authValidityDuration);
         editor.apply();
     }
 
@@ -584,7 +578,7 @@ public class AuthActivity extends AppCompatActivity {
     private BiometricPrompt.CryptoObject createCredentialDecryptCryptoObject() {
         try {
             String server = getIntent().getStringExtra("server");
-            SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+            SharedPreferences prefs = SecureCredentialPreferences.open(this);
             String encryptedData = prefs.getString("secure_" + server, null);
             if (encryptedData == null) {
                 finishActivity("error", 21, "No protected credentials found");
@@ -596,6 +590,11 @@ public class AuthActivity extends AppCompatActivity {
             System.arraycopy(combined, 0, iv, 0, CREDENTIAL_GCM_IV_LENGTH);
 
             SecretKey key = getOrCreateCredentialKey(server, 0);
+            if (!prefs.contains("secure_" + server)) {
+                finishActivity("error", 21, "No protected credentials found");
+                return null;
+            }
+
             Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
             try {
                 cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
@@ -627,7 +626,7 @@ public class AuthActivity extends AppCompatActivity {
         if (server == null) {
             return false;
         }
-        SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+        SharedPreferences prefs = SecureCredentialPreferences.open(this);
         return AsymmetricSecureDataHelper.isAsymmetricFormat(prefs, server);
     }
 
@@ -647,7 +646,7 @@ public class AuthActivity extends AppCompatActivity {
     private void handleGetSecureDataAsymmetric(BiometricPrompt.AuthenticationResult result) {
         try {
             String server = getIntent().getStringExtra("server");
-            SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+            SharedPreferences prefs = SecureCredentialPreferences.open(this);
             String encryptedData = prefs.getString("secure_" + server, null);
             if (encryptedData == null) {
                 finishActivity("error", 21, "No protected data found");
@@ -672,10 +671,10 @@ public class AuthActivity extends AppCompatActivity {
             return;
         }
         AsymmetricSecureDataHelper.deleteAsymmetricKey(this, server);
-        getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE)
+        SecureCredentialPreferences.open(this)
             .edit()
             .remove("secure_" + server)
-            .remove(AsymmetricSecureDataHelper.secureFormatKey(server))
+            .remove(SecureCredentialPreferences.formatKey(server))
             .apply();
     }
 
@@ -704,7 +703,7 @@ public class AuthActivity extends AppCompatActivity {
 
             String encoded = Base64.encodeToString(combined, Base64.DEFAULT);
 
-            SharedPreferences.Editor editor = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit();
+            SharedPreferences.Editor editor = SecureCredentialPreferences.open(this).edit();
             editor.putString("secure_" + server, encoded);
             editor.apply();
 
@@ -718,7 +717,7 @@ public class AuthActivity extends AppCompatActivity {
         try {
             String server = getIntent().getStringExtra("server");
 
-            SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+            SharedPreferences prefs = SecureCredentialPreferences.open(this);
             String encryptedData = prefs.getString("secure_" + server, null);
             if (encryptedData == null) {
                 finishActivity("error", 21, "No protected credentials found");
@@ -829,7 +828,7 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     private Cipher createCredentialCipherForDecrypt(String server, int authValidityDuration) throws GeneralSecurityException, IOException {
-        SharedPreferences prefs = getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE);
+        SharedPreferences prefs = SecureCredentialPreferences.open(this);
         String encryptedData = prefs.getString("secure_" + server, null);
         if (encryptedData == null) return null;
 
@@ -838,6 +837,10 @@ public class AuthActivity extends AppCompatActivity {
         System.arraycopy(combined, 0, iv, 0, CREDENTIAL_GCM_IV_LENGTH);
 
         SecretKey key = getOrCreateCredentialKey(server, 0, authValidityDuration);
+        if (!prefs.contains("secure_" + server)) {
+            return null;
+        }
+
         Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
         try {
             cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
@@ -908,32 +911,26 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     private void storeAuthKeyTypes(int authTypes) {
-        getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit().putInt(AUTH_KEY_AUTH_TYPES, authTypes).apply();
+        SecureCredentialPreferences.open(this).edit().putInt(AUTH_KEY_AUTH_TYPES, authTypes).apply();
     }
 
     private void storeAuthKeyTypesScheme(int schemeVersion) {
-        getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).edit().putInt(AUTH_KEY_AUTH_TYPES_SCHEME, schemeVersion).apply();
+        SecureCredentialPreferences.open(this).edit().putInt(AUTH_KEY_AUTH_TYPES_SCHEME, schemeVersion).apply();
     }
 
     private int getStoredCredentialAuthScheme(String server) {
-        return getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).getInt("secure_" + server + SECURE_AUTH_SCHEME_SUFFIX, 0);
+        return SecureCredentialPreferences.open(this).getInt(SecureCredentialPreferences.authSchemeKey(server), 0);
     }
 
     private int getStoredAccessControl(String server) {
-        return getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE).getInt("secure_" + server + SECURE_ACCESS_CONTROL_SUFFIX, 0);
+        return SecureCredentialPreferences.open(this).getInt(SecureCredentialPreferences.accessControlKey(server), 0);
     }
 
     private void storeCredentialAuthScheme(String server, int schemeVersion) {
-        getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE)
-            .edit()
-            .putInt("secure_" + server + SECURE_AUTH_SCHEME_SUFFIX, schemeVersion)
-            .apply();
+        SecureCredentialPreferences.open(this).edit().putInt(SecureCredentialPreferences.authSchemeKey(server), schemeVersion).apply();
     }
 
     private void storeAccessControl(String server, int accessControl) {
-        getSharedPreferences(SHARED_PREFS_NAME, MODE_PRIVATE)
-            .edit()
-            .putInt("secure_" + server + SECURE_ACCESS_CONTROL_SUFFIX, accessControl)
-            .apply();
+        SecureCredentialPreferences.open(this).edit().putInt(SecureCredentialPreferences.accessControlKey(server), accessControl).apply();
     }
 }

@@ -69,6 +69,7 @@ export interface IsAvailableOptions {
    * - On iOS, this affects both `isAvailable()` and `verifyIdentity()`.
    * - On Android, `isAvailable()` counts the device credential when the lock screen is secure.
    *   Pass `BiometricOptions.useFallback` to configure the verification prompt separately.
+   *   This option adds a device credential to the prompt only on Android 11 or newer.
    */
   useFallback: boolean;
   /**
@@ -142,8 +143,10 @@ export interface BiometricOptions {
   negativeButtonText?: string;
   /**
    * Allows the device passcode as an alternative in `verifyIdentity()`.
-   * On Android 11 or newer, this adds PIN, pattern, or password alongside strong biometrics
-   * when a secure lock screen is configured. An explicit `allowedBiometryTypes` list takes priority.
+   * On Android 11 or newer with a secure lock screen, the default fallback prompt allows
+   * strong biometrics and PIN, pattern, or password. Weak biometrics are excluded from
+   * this prompt. Omitting `allowedBiometryTypes`, passing an empty list, or passing only
+   * iOS types uses the default prompt. A list with Android types takes priority.
    * Android hides the negative button when the prompt allows the device credential.
    */
   useFallback?: boolean;
@@ -162,9 +165,10 @@ export interface BiometricOptions {
   /**
    * Only for Android.
    * Specify which biometry types are allowed for authentication.
-   * If not specified, all enrolled biometric classes (strong and weak) are allowed.
-   * On Android, face unlock is often classified as weak biometrics — include
-   * `BiometryType.FACE_AUTHENTICATION` or omit this option to allow it.
+   * If the list has no Android types, the prompt allows strong and weak biometrics by default.
+   * When `useFallback` enables device credentials, the default prompt allows only strong biometrics
+   * alongside PIN, pattern, or password. Face unlock can be classified as weak on Android.
+   * Include `BiometryType.FACE_AUTHENTICATION` in an explicit list to allow weak face unlock.
    * Use `BiometryType.DEVICE_CREDENTIAL` for PIN/pattern/password (disables the cancel button).
    * @example [BiometryType.FINGERPRINT, BiometryType.FACE_AUTHENTICATION]
    */
