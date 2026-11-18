@@ -147,7 +147,7 @@ public class AuthActivity extends AppCompatActivity {
         try {
             promptInfo = builder.build();
         } catch (IllegalArgumentException e) {
-            finishActivity("error", 1, "Biometric prompt configuration unavailable");
+            finishActivity("error", 0, "Invalid biometric prompt configuration");
             return;
         }
 
