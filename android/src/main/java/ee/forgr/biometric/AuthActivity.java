@@ -12,6 +12,7 @@ import android.security.keystore.KeyProperties;
 import android.security.keystore.UserNotAuthenticatedException;
 import android.util.Base64;
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
@@ -20,6 +21,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
+import java.security.Key;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -41,6 +43,7 @@ public class AuthActivity extends AppCompatActivity {
     private static final String AUTH_TRANSFORMATION = "AES/GCM/NoPadding";
     private static final String SECURE_KEY_PREFIX = "NativeBiometricSecure_";
     private static final int CREDENTIAL_GCM_IV_LENGTH = 12;
+    private static final int NO_PROTECTED_CREDENTIALS = 21;
 
     private BiometricPrompt biometricPrompt;
     private Cipher authCipher;
@@ -90,7 +93,7 @@ public class AuthActivity extends AppCompatActivity {
         if ("setSecureCredentials".equals(mode) || "setSecureData".equals(mode)) {
             // Not yet persisted — this call establishes the mode for the alias.
             authValidityDuration = Math.max(0, getIntent().getIntExtra("authValidityDuration", 0));
-        } else if ("getSecureCredentials".equals(mode) || "getSecureData".equals(mode)) {
+        } else if (isSecureReadMode()) {
             authValidityDuration = getStoredAuthValidityDuration(server);
         }
 
@@ -140,7 +143,13 @@ public class AuthActivity extends AppCompatActivity {
             builder.setNegativeButtonText(negativeText != null ? negativeText : "Cancel");
         }
 
-        BiometricPrompt.PromptInfo promptInfo = builder.build();
+        BiometricPrompt.PromptInfo promptInfo;
+        try {
+            promptInfo = builder.build();
+        } catch (IllegalArgumentException e) {
+            finishActivity("error", 1, "Biometric prompt configuration unavailable");
+            return;
+        }
 
         biometricPrompt = new BiometricPrompt(
             this,
@@ -387,23 +396,9 @@ public class AuthActivity extends AppCompatActivity {
         KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
         ks.load(null);
 
-        if (ks.containsAlias(alias)) {
-            int storedScheme = getStoredCredentialAuthScheme(server);
-            Integer keystoreAuthType = null;
-            Integer validityDurationSeconds = null;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                CredentialKeyAuthInfo info = readCredentialKeyAuthInfo(ks, alias);
-                keystoreAuthType = info.authType;
-                validityDurationSeconds = info.validityDurationSeconds;
-            }
-            if (
-                BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(
-                    storedScheme,
-                    Build.VERSION.SDK_INT,
-                    keystoreAuthType,
-                    validityDurationSeconds
-                )
-            ) {
+        SecretKey existingKey = findCredentialKey(ks, server);
+        if (existingKey != null) {
+            if (requiresCredentialKeyRecovery(server, existingKey)) {
                 removeCredentialKeyAndData(server, ks);
             } else if (getStoredAuthValidityDuration(server) != authValidityDuration) {
                 // If the caller asked for a different auth model than the one the existing key was
@@ -415,7 +410,7 @@ public class AuthActivity extends AppCompatActivity {
                 ks.deleteEntry(alias);
                 SecureCredentialPreferences.open(this).edit().remove("secure_" + server).apply();
             } else {
-                return (SecretKey) ks.getKey(alias, null);
+                return existingKey;
             }
         }
 
@@ -475,19 +470,31 @@ public class AuthActivity extends AppCompatActivity {
         }
     }
 
-    private CredentialKeyAuthInfo readCredentialKeyAuthInfo(KeyStore keyStore, String alias) {
+    private boolean requiresCredentialKeyRecovery(String server, SecretKey key) {
+        int storedScheme = getStoredCredentialAuthScheme(server);
+        CredentialKeyAuthInfo info = storedScheme == 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            ? readCredentialKeyAuthInfo(key)
+            : new CredentialKeyAuthInfo(null, null);
+        return BiometricAuthenticatorConfig.shouldRecoverLegacyCredentialKey(
+            storedScheme,
+            Build.VERSION.SDK_INT,
+            info.authType,
+            info.validityDurationSeconds
+        );
+    }
+
+    /** Looks up the current protected credential key in a loaded keystore without modifying it. */
+    static SecretKey findCredentialKey(KeyStore keyStore, String server) throws GeneralSecurityException {
+        Key key = keyStore.getKey(SECURE_KEY_PREFIX + server, null);
+        return key instanceof SecretKey ? (SecretKey) key : null;
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    private CredentialKeyAuthInfo readCredentialKeyAuthInfo(SecretKey key) {
         try {
-            SecretKey key = (SecretKey) keyStore.getKey(alias, null);
-            if (key == null) {
-                return new CredentialKeyAuthInfo(null, null);
-            }
             SecretKeyFactory factory = SecretKeyFactory.getInstance(key.getAlgorithm(), "AndroidKeyStore");
             KeyInfo info = (KeyInfo) factory.getKeySpec(key, KeyInfo.class);
-            Integer authType = null;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                authType = info.getUserAuthenticationType();
-            }
-            return new CredentialKeyAuthInfo(authType, info.getUserAuthenticationValidityDurationSeconds());
+            return new CredentialKeyAuthInfo(info.getUserAuthenticationType(), info.getUserAuthenticationValidityDurationSeconds());
         } catch (GeneralSecurityException | RuntimeException e) {
             // Unreadable KeyInfo: treat as unconfirmed so the caller recovers rather than
             // keeping a key that a strong-biometric prompt cannot satisfy.
@@ -578,37 +585,15 @@ public class AuthActivity extends AppCompatActivity {
     private BiometricPrompt.CryptoObject createCredentialDecryptCryptoObject() {
         try {
             String server = getIntent().getStringExtra("server");
-            SharedPreferences prefs = SecureCredentialPreferences.open(this);
-            String encryptedData = prefs.getString("secure_" + server, null);
-            if (encryptedData == null) {
-                finishActivity("error", 21, "No protected credentials found");
-                return null;
-            }
-
-            byte[] combined = Base64.decode(encryptedData, Base64.DEFAULT);
-            byte[] iv = new byte[CREDENTIAL_GCM_IV_LENGTH];
-            System.arraycopy(combined, 0, iv, 0, CREDENTIAL_GCM_IV_LENGTH);
-
-            SecretKey key = getOrCreateCredentialKey(server, 0);
-            if (!prefs.contains("secure_" + server)) {
-                finishActivity("error", 21, "No protected credentials found");
-                return null;
-            }
-
-            Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
-            try {
-                cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
-            } catch (InvalidKeyException e) {
-                // Key was created with incompatible parameters (e.g., time-based auth on older
-                // Android). Delete the unusable key and the encrypted data so the user can
-                // re-enroll credentials via setSecureCredentials.
-                KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
-                ks.load(null);
-                removeCredentialKeyAndData(server, ks);
-                finishActivity("error", 21, "No protected credentials found");
+            Cipher cipher = createCredentialCipherForDecrypt(server);
+            if (cipher == null) {
+                finishActivity("error", NO_PROTECTED_CREDENTIALS, "No usable protected credentials found");
                 return null;
             }
             return new BiometricPrompt.CryptoObject(cipher);
+        } catch (UserNotAuthenticatedException e) {
+            finishActivity("error", 10, "Biometric authentication required");
+            return null;
         } catch (GeneralSecurityException | IOException e) {
             return null;
         }
@@ -762,13 +747,7 @@ public class AuthActivity extends AppCompatActivity {
                 Cipher cipher = createCredentialCipherForEncrypt(server, accessControl, authValidityDuration);
                 encryptAndStoreCredentials(cipher);
             } else {
-                String server = getIntent().getStringExtra("server");
-                Cipher cipher = createCredentialCipherForDecrypt(server, authValidityDuration);
-                if (cipher == null) {
-                    finishActivity("error", 21, "No protected credentials found");
-                    return true;
-                }
-                decryptAndReturnCredentials(cipher);
+                readCredentialWithinValidityWindow(getIntent().getStringExtra("server"));
             }
             return true;
         } catch (UserNotAuthenticatedException e) {
@@ -794,14 +773,10 @@ public class AuthActivity extends AppCompatActivity {
                 Cipher cipher = createCredentialCipherForEncrypt(server, accessControl, authValidityDuration);
                 encryptAndStoreCredentials(cipher);
             } else {
-                String server = getIntent().getStringExtra("server");
-                Cipher cipher = createCredentialCipherForDecrypt(server, authValidityDuration);
-                if (cipher == null) {
-                    finishActivity("error", 21, "No protected credentials found");
-                    return;
-                }
-                decryptAndReturnCredentials(cipher);
+                readCredentialWithinValidityWindow(getIntent().getStringExtra("server"));
             }
+        } catch (UserNotAuthenticatedException e) {
+            finishActivity("error", 10, "Biometric authentication required");
         } catch (GeneralSecurityException | IOException e) {
             finishActivity("error", 0, "Keystore operation failed after authentication: " + e.getMessage());
         }
@@ -827,35 +802,44 @@ public class AuthActivity extends AppCompatActivity {
         return cipher;
     }
 
-    private Cipher createCredentialCipherForDecrypt(String server, int authValidityDuration) throws GeneralSecurityException, IOException {
+    private void readCredentialWithinValidityWindow(String server) throws GeneralSecurityException, IOException {
+        if (getStoredAuthValidityDuration(server) != authValidityDuration) {
+            finishActivity("error", 10, "Protected credential settings changed. Authenticate again.");
+            return;
+        }
+
+        Cipher cipher = createCredentialCipherForDecrypt(server);
+        if (cipher == null) {
+            finishActivity("error", NO_PROTECTED_CREDENTIALS, "No usable protected credentials found");
+            return;
+        }
+        decryptAndReturnCredentials(cipher);
+    }
+
+    private Cipher createCredentialCipherForDecrypt(String server) throws GeneralSecurityException, IOException {
         SharedPreferences prefs = SecureCredentialPreferences.open(this);
         String encryptedData = prefs.getString("secure_" + server, null);
-        if (encryptedData == null) return null;
-
-        byte[] combined = Base64.decode(encryptedData, Base64.DEFAULT);
-        byte[] iv = new byte[CREDENTIAL_GCM_IV_LENGTH];
-        System.arraycopy(combined, 0, iv, 0, CREDENTIAL_GCM_IV_LENGTH);
-
-        SecretKey key = getOrCreateCredentialKey(server, 0, authValidityDuration);
-        if (!prefs.contains("secure_" + server)) {
+        if (encryptedData == null) {
             return null;
         }
 
-        Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
+        KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+        keyStore.load(null);
         try {
-            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
-        } catch (InvalidKeyException e) {
-            if (e instanceof UserNotAuthenticatedException) {
-                throw e;
+            SecretKey key = findCredentialKey(keyStore, server);
+            if (key == null || requiresCredentialKeyRecovery(server, key)) {
+                return null;
             }
-            // Key was invalidated (e.g. biometric enrollment changed). Delete the unusable key
-            // and encrypted data so the user can re-enroll via setSecureCredentials.
-            KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
-            ks.load(null);
-            removeCredentialKeyAndData(server, ks);
+
+            byte[] combined = Base64.decode(encryptedData, Base64.DEFAULT);
+            Cipher cipher = Cipher.getInstance(AUTH_TRANSFORMATION);
+            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, combined, 0, CREDENTIAL_GCM_IV_LENGTH));
+            return cipher;
+        } catch (UserNotAuthenticatedException e) {
+            throw e;
+        } catch (InvalidKeyException | UnrecoverableKeyException e) {
             return null;
         }
-        return cipher;
     }
 
     /**
