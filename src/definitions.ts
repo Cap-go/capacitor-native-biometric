@@ -69,7 +69,7 @@ export interface IsAvailableOptions {
    * - On iOS, this affects both `isAvailable()` and `verifyIdentity()`.
    * - On Android, `isAvailable()` counts the device credential when the lock screen is secure.
    *   Pass `BiometricOptions.useFallback` to configure the verification prompt separately.
-   *   This option adds a device credential to the prompt only on Android 11 or newer.
+   *   The separate `BiometricOptions.useFallback` option adds a device credential to the prompt only on Android 11 or newer.
    */
   useFallback: boolean;
   /**
