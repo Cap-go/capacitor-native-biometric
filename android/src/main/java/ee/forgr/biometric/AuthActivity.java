@@ -396,7 +396,13 @@ public class AuthActivity extends AppCompatActivity {
         KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
         ks.load(null);
 
-        SecretKey existingKey = findCredentialKey(ks, server);
+        SecretKey existingKey;
+        try {
+            existingKey = findCredentialKey(ks, server);
+        } catch (UnrecoverableKeyException e) {
+            ks.deleteEntry(alias);
+            existingKey = null;
+        }
         if (existingKey != null) {
             if (requiresCredentialKeyRecovery(server, existingKey)) {
                 removeCredentialKeyAndData(server, ks);
