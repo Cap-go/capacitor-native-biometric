@@ -400,7 +400,7 @@ public class AuthActivity extends AppCompatActivity {
         try {
             existingKey = findCredentialKey(ks, server);
         } catch (UnrecoverableKeyException e) {
-            ks.deleteEntry(alias);
+            removeCredentialKeyAndData(server, ks);
             existingKey = null;
         }
         if (existingKey != null) {
