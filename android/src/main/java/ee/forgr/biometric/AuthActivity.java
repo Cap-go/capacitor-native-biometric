@@ -773,13 +773,28 @@ public class AuthActivity extends AppCompatActivity {
      */
     private void retryAfterPrompt() {
         try {
+            String server = getIntent().getStringExtra("server");
+            int accessControl = getIntent().getIntExtra("accessControl", 2);
+            int durationForOperation;
             if (isSecureWriteMode()) {
-                String server = getIntent().getStringExtra("server");
-                int accessControl = getIntent().getIntExtra("accessControl", 2);
-                Cipher cipher = createCredentialCipherForEncrypt(server, accessControl, authValidityDuration);
+                durationForOperation = Math.max(0, getIntent().getIntExtra("authValidityDuration", 0));
+                SharedPreferences prefs = SecureCredentialPreferences.open(this);
+                if (prefs.contains("secure_" + server) && getStoredAuthValidityDuration(server) != durationForOperation) {
+                    finishActivity("error", 10, "Protected credential settings changed. Authenticate again.");
+                    return;
+                }
+            } else {
+                durationForOperation = getStoredAuthValidityDuration(server);
+                if (durationForOperation != authValidityDuration) {
+                    finishActivity("error", 10, "Protected credential settings changed. Authenticate again.");
+                    return;
+                }
+            }
+            if (isSecureWriteMode()) {
+                Cipher cipher = createCredentialCipherForEncrypt(server, accessControl, durationForOperation);
                 encryptAndStoreCredentials(cipher);
             } else {
-                readCredentialWithinValidityWindow(getIntent().getStringExtra("server"));
+                readCredentialWithinValidityWindow(server);
             }
         } catch (UserNotAuthenticatedException e) {
             finishActivity("error", 10, "Biometric authentication required");
