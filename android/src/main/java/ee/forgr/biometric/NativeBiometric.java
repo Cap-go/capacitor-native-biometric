@@ -23,6 +23,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import ee.forgr.biometric.capacitornativebiometric.BuildConfig;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -54,8 +55,6 @@ import org.json.JSONException;
 @CapacitorPlugin(name = "NativeBiometric")
 public class NativeBiometric extends Plugin {
 
-    private final String pluginVersion = "7.5.4";
-
     //protected final static int AUTH_CODE = 0102;
 
     private static final int NONE = 0;
@@ -79,7 +78,6 @@ public class NativeBiometric extends Plugin {
     private static final int GCM_TAG_LENGTH_BYTES = 16;
     private static final int MIN_NEW_FORMAT_LENGTH = GCM_IV_LENGTH + GCM_TAG_LENGTH_BYTES;
     private static final String ENCRYPTED_KEY = "NativeBiometricKey";
-    private static final String NATIVE_BIOMETRIC_SHARED_PREFERENCES = "NativeBiometricSharedPreferences";
     private static final String DATA_KEY_PREFIX = "data_";
     private static final String DATA_KEYSTORE_PREFIX = "NativeBiometricData_";
 
@@ -379,10 +377,8 @@ public class NativeBiometric extends Plugin {
             intent.putExtra("allowedBiometryTypes", types);
         }
 
-        // Note: useFallback parameter is ignored on Android (iOS-only feature)
-        // Android's BiometricPrompt doesn't support fallback to device credentials when a negative button is present.
-        // The API constraint: setNegativeButtonText() and DEVICE_CREDENTIAL authenticator are mutually exclusive.
-        // Since we need the negative button for user cancellation, fallback cannot be supported on Android.
+        boolean useFallback = Boolean.TRUE.equals(call.getBoolean("useFallback", false));
+        intent.putExtra("useFallback", useFallback && deviceHasCredentials());
 
         startActivityForResult(call, intent, "verifyResult");
     }
@@ -425,9 +421,7 @@ public class NativeBiometric extends Plugin {
             startActivityForResult(call, intent, "setSecureCredentialsResult");
         } else {
             try {
-                SharedPreferences.Editor editor = getContext()
-                    .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE)
-                    .edit();
+                SharedPreferences.Editor editor = SecureCredentialPreferences.open(getContext()).edit();
                 editor.putString(KEY_ALIAS + "-username", encryptString(username, KEY_ALIAS));
                 editor.putString(KEY_ALIAS + "-password", encryptString(password, KEY_ALIAS));
                 editor.apply();
@@ -446,7 +440,7 @@ public class NativeBiometric extends Plugin {
             return;
         }
 
-        SharedPreferences sharedPreferences = getContext().getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE);
+        SharedPreferences sharedPreferences = SecureCredentialPreferences.open(getContext());
         String encryptedData = sharedPreferences.getString("secure_" + server, null);
         if (encryptedData == null) {
             call.reject("No protected credentials found", "21");
@@ -473,7 +467,7 @@ public class NativeBiometric extends Plugin {
     public void getCredentials(final PluginCall call) {
         String KEY_ALIAS = call.getString("server", null);
 
-        SharedPreferences sharedPreferences = getContext().getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE);
+        SharedPreferences sharedPreferences = SecureCredentialPreferences.open(getContext());
         String username = sharedPreferences.getString(KEY_ALIAS + "-username", null);
         String password = sharedPreferences.getString(KEY_ALIAS + "-password", null);
         if (KEY_ALIAS != null) {
@@ -562,15 +556,11 @@ public class NativeBiometric extends Plugin {
         if (KEY_ALIAS != null) {
             try {
                 getKeyStore().deleteEntry(KEY_ALIAS);
-                SharedPreferences.Editor editor = getContext()
-                    .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE)
-                    .edit();
+                SharedPreferences.Editor editor = SecureCredentialPreferences.open(getContext()).edit();
                 editor.remove(KEY_ALIAS + "-username");
                 editor.remove(KEY_ALIAS + "-password");
                 editor.remove("secure_" + KEY_ALIAS);
-                editor.remove("secure_" + KEY_ALIAS + "_validity");
-                editor.remove("secure_" + KEY_ALIAS + "_auth_scheme");
-                editor.remove("secure_" + KEY_ALIAS + "_access_control");
+                SecureCredentialPreferences.removeMetadata(editor, KEY_ALIAS);
                 editor.apply();
 
                 try {
@@ -593,10 +583,7 @@ public class NativeBiometric extends Plugin {
         String KEY_ALIAS = call.getString("server", null);
 
         if (KEY_ALIAS != null) {
-            SharedPreferences sharedPreferences = getContext().getSharedPreferences(
-                NATIVE_BIOMETRIC_SHARED_PREFERENCES,
-                Context.MODE_PRIVATE
-            );
+            SharedPreferences sharedPreferences = SecureCredentialPreferences.open(getContext());
             String username = sharedPreferences.getString(KEY_ALIAS + "-username", null);
             String password = sharedPreferences.getString(KEY_ALIAS + "-password", null);
 
@@ -665,13 +652,11 @@ public class NativeBiometric extends Plugin {
                         value.getBytes(StandardCharsets.UTF_8),
                         accessControl
                     );
-                    SharedPreferences.Editor editor = getContext()
-                        .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE)
-                        .edit();
+                    SharedPreferences.Editor editor = SecureCredentialPreferences.open(getContext()).edit();
                     editor.putString("secure_" + storageKey, encoded);
-                    editor.putInt(AsymmetricSecureDataHelper.secureFormatKey(storageKey), AsymmetricSecureDataHelper.FORMAT_ASYMMETRIC);
-                    editor.putInt("secure_" + storageKey + "_access_control", accessControl);
-                    editor.putInt("secure_" + storageKey + "_validity", 0);
+                    editor.putInt(SecureCredentialPreferences.formatKey(storageKey), AsymmetricSecureDataHelper.FORMAT_ASYMMETRIC);
+                    editor.putInt(SecureCredentialPreferences.accessControlKey(storageKey), accessControl);
+                    editor.putInt(SecureCredentialPreferences.validityKey(storageKey), 0);
                     editor.apply();
                     AsymmetricSecureDataHelper.deleteSymmetricLegacyKey(getContext(), storageKey);
                     call.resolve();
@@ -681,9 +666,7 @@ public class NativeBiometric extends Plugin {
             }
         } else {
             try {
-                SharedPreferences.Editor editor = getContext()
-                    .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE)
-                    .edit();
+                SharedPreferences.Editor editor = SecureCredentialPreferences.open(getContext()).edit();
                 editor.putString(storageKey, encryptString(value, dataKeyAlias(key)));
                 editor.apply();
                 call.resolve();
@@ -702,7 +685,7 @@ public class NativeBiometric extends Plugin {
         }
 
         String storageKey = dataStorageKey(key);
-        SharedPreferences sharedPreferences = getContext().getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE);
+        SharedPreferences sharedPreferences = SecureCredentialPreferences.open(getContext());
         String encryptedValue = sharedPreferences.getString(storageKey, null);
 
         if (encryptedValue == null) {
@@ -728,7 +711,7 @@ public class NativeBiometric extends Plugin {
         }
 
         String storageKey = dataStorageKey(key);
-        SharedPreferences sharedPreferences = getContext().getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE);
+        SharedPreferences sharedPreferences = SecureCredentialPreferences.open(getContext());
         String encryptedData = sharedPreferences.getString("secure_" + storageKey, null);
         if (encryptedData == null) {
             call.reject("No protected data found", "21");
@@ -764,15 +747,10 @@ public class NativeBiometric extends Plugin {
 
         try {
             getKeyStore().deleteEntry(keyAlias);
-            SharedPreferences.Editor editor = getContext()
-                .getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE)
-                .edit();
+            SharedPreferences.Editor editor = SecureCredentialPreferences.open(getContext()).edit();
             editor.remove(storageKey);
             editor.remove("secure_" + storageKey);
-            editor.remove("secure_" + storageKey + "_validity");
-            editor.remove("secure_" + storageKey + "_auth_scheme");
-            editor.remove("secure_" + storageKey + "_access_control");
-            editor.remove(AsymmetricSecureDataHelper.secureFormatKey(storageKey));
+            SecureCredentialPreferences.removeMetadata(editor, storageKey);
             editor.apply();
 
             try {
@@ -797,7 +775,7 @@ public class NativeBiometric extends Plugin {
         }
 
         String storageKey = dataStorageKey(key);
-        SharedPreferences sharedPreferences = getContext().getSharedPreferences(NATIVE_BIOMETRIC_SHARED_PREFERENCES, Context.MODE_PRIVATE);
+        SharedPreferences sharedPreferences = SecureCredentialPreferences.open(getContext());
         boolean hasUnprotected = sharedPreferences.getString(storageKey, null) != null;
         boolean hasProtected = sharedPreferences.getString("secure_" + storageKey, null) != null;
 
@@ -1082,7 +1060,7 @@ public class NativeBiometric extends Plugin {
     public void getPluginVersion(final PluginCall call) {
         try {
             final JSObject ret = new JSObject();
-            ret.put("version", this.pluginVersion);
+            ret.put("version", BuildConfig.PLUGIN_VERSION);
             call.resolve(ret);
         } catch (final Exception e) {
             call.reject("Could not get plugin version", e);

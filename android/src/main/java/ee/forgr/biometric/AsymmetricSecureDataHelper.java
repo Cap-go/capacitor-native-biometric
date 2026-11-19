@@ -32,7 +32,6 @@ import javax.crypto.spec.SecretKeySpec;
 final class AsymmetricSecureDataHelper {
 
     static final String ASYMMETRIC_KEY_PREFIX = "NativeBiometricAsymmetric_";
-    static final String FORMAT_SUFFIX = "_format";
     static final int FORMAT_SYMMETRIC = 0;
     static final int FORMAT_ASYMMETRIC = 1;
 
@@ -47,11 +46,7 @@ final class AsymmetricSecureDataHelper {
     private AsymmetricSecureDataHelper() {}
 
     static boolean isAsymmetricFormat(SharedPreferences prefs, String storageKey) {
-        return prefs.getInt(secureFormatKey(storageKey), FORMAT_SYMMETRIC) == FORMAT_ASYMMETRIC;
-    }
-
-    static String secureFormatKey(String storageKey) {
-        return "secure_" + storageKey + FORMAT_SUFFIX;
+        return prefs.getInt(SecureCredentialPreferences.formatKey(storageKey), FORMAT_SYMMETRIC) == FORMAT_ASYMMETRIC;
     }
 
     static String asymmetricAlias(String storageKey) {
@@ -137,8 +132,8 @@ final class AsymmetricSecureDataHelper {
         KeyStore ks = KeyStore.getInstance(ANDROID_KEY_STORE);
         ks.load(null);
 
-        SharedPreferences prefs = context.getSharedPreferences("NativeBiometricSharedPreferences", Context.MODE_PRIVATE);
-        int storedAccessControl = prefs.getInt("secure_" + storageKey + "_access_control", 0);
+        SharedPreferences prefs = SecureCredentialPreferences.open(context);
+        int storedAccessControl = prefs.getInt(SecureCredentialPreferences.accessControlKey(storageKey), 0);
         if (ks.containsAlias(alias) && accessControl > 0 && storedAccessControl != accessControl) {
             ks.deleteEntry(alias);
             prefs.edit().remove("secure_" + storageKey).apply();
@@ -152,7 +147,7 @@ final class AsymmetricSecureDataHelper {
                 return entry;
             } catch (KeyPermanentlyInvalidatedException e) {
                 ks.deleteEntry(alias);
-                prefs.edit().remove("secure_" + storageKey).remove(secureFormatKey(storageKey)).apply();
+                prefs.edit().remove("secure_" + storageKey).remove(SecureCredentialPreferences.formatKey(storageKey)).apply();
             }
         }
 

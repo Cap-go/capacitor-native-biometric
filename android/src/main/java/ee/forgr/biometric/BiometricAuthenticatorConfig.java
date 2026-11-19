@@ -45,8 +45,13 @@ public final class BiometricAuthenticatorConfig {
     }
 
     public static BiometricAuthenticatorConfig fromAllowedTypes(int[] allowedTypes) {
-        if (allowedTypes == null || allowedTypes.length == 0) {
-            return defaultBiometric();
+        BiometricAuthenticatorConfig explicitConfig = parseAllowedTypes(allowedTypes);
+        return explicitConfig != null ? explicitConfig : defaultBiometric();
+    }
+
+    private static BiometricAuthenticatorConfig parseAllowedTypes(int[] allowedTypes) {
+        if (allowedTypes == null) {
+            return null;
         }
 
         int promptAuth = 0;
@@ -88,7 +93,7 @@ public final class BiometricAuthenticatorConfig {
         }
 
         if (promptAuth == 0) {
-            return defaultBiometric();
+            return null;
         }
 
         if (hasBiometric && fingerprintOnly && !hasDeviceCredential) {
@@ -100,6 +105,17 @@ public final class BiometricAuthenticatorConfig {
         boolean deviceCredentialOnly = hasDeviceCredential && !hasBiometric;
 
         return new BiometricAuthenticatorConfig(promptAuth, keyAuth > 0 ? keyAuth : keyAuthAny(), allowNegative, !deviceCredentialOnly);
+    }
+
+    static BiometricAuthenticatorConfig forVerification(int[] allowedTypes, boolean useFallback, int sdkInt) {
+        BiometricAuthenticatorConfig explicitConfig = parseAllowedTypes(allowedTypes);
+        if (explicitConfig != null) {
+            return explicitConfig;
+        }
+
+        return useFallback && sdkInt >= Build.VERSION_CODES.R
+            ? fromAllowedTypes(new int[] { FINGERPRINT, DEVICE_CREDENTIAL })
+            : defaultBiometric();
     }
 
     private static BiometricAuthenticatorConfig defaultBiometric() {
